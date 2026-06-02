@@ -1,0 +1,46 @@
+[project]
+name = "telemetry-intelligence-platform"
+version = "0.1.0"
+description = "Real-time telemetry ingestion and analysis platform with AI-powered diagnosis"
+requires-python = ">=3.10"
+
+dependencies = [
+    # API Framework
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+
+    # Kafka (async producer/consumer)
+    "aiokafka>=0.10.0",
+
+    # PostgreSQL (async driver)
+    "asyncpg>=0.29.0",
+
+    # Data validation & settings
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+
+    # Environment variable loading
+    "python-dotenv>=1.0.1",
+
+    # HTTP client (for simulator)
+    "httpx>=0.27.0",
+
+    # Numerical (simulator normal distributions)
+    "numpy>=2.1.0",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "services/api_gateway/tests", "services/ingestion_consumer/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+

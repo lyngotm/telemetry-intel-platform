@@ -1,0 +1,145 @@
+"""
+Pydantic models for the Telemetry Intelligence Platform.
+
+These models are shared between the API Gateway and Ingestion Consumer
+to ensure consistent validation across the pipeline.
+"""
+
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+import math
+from pydantic import BaseModel, Field, field_validator
+
+
+# ============================================================
+# DEVICE MODELS
+# ============================================================
+
+class DeviceCreate(BaseModel):
+    """Request body for registering a new device."""
+
+    device_name: str = Field(..., min_length=1, max_length=255, examples=["sensor-floor-3-east"])
+    device_type: str = Field(..., min_length=1, max_length=100, examples=["temperature_sensor"])
+    location: str | None = Field(None, max_length=255, examples=["Building A, Floor 3"])
+    firmware_version: str | None = Field(None, max_length=50, examples=["v2.1.0"])
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeviceResponse(BaseModel):
+    """Device data as returned by the API."""
+
+    device_id: UUID
+    device_name: str
+    device_type: str
+    location: str | None
+    firmware_version: str | None
+    metadata: dict[str, Any]
+    registered_at: datetime
+    updated_at: datetime
+
+
+# ============================================================
+# TELEMETRY EVENT MODELS
+# ============================================================
+
+# Valid metric types for this platform.
+# Restricting this prevents garbage data from entering the pipeline.
+VALID_METRIC_TYPES = {"temperature", "humidity", "pressure", "cpu_usage"}
+
+
+class TelemetryEventCreate(BaseModel):
+    """
+    Request body for submitting a telemetry event.
+    This is what the simulator/devices POST to the API.
+    """
+
+    device_id: UUID
+    metric_type: str = Field(..., min_length=1, max_length=100, examples=["temperature"])
+    value: float = Field(..., examples=[23.5])
+    timestamp: datetime = Field(..., examples=["2026-05-28T14:30:00Z"])
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("metric_type")
+    @classmethod
+    def validate_metric_type(cls, v: str) -> str:
+        if v not in VALID_METRIC_TYPES:
+            raise ValueError(
+                f"Invalid metric_type '{v}'. Must be one of: {sorted(VALID_METRIC_TYPES)}"
+            )
+        return v
+
+    @field_validator("value")
+    @classmethod
+    def validate_value_is_finite(cls, v: float) -> float:
+        """Reject NaN and infinity — these indicate sensor malfunction, not real readings."""
+        if math.isnan(v) or math.isinf(v):
+            raise ValueError("Value must be a finite number")
+        return v
+
+
+class TelemetryEventResponse(BaseModel):
+    """Telemetry event as returned by the API (includes server-generated fields)."""
+
+    event_id: UUID
+    device_id: UUID
+    metric_type: str
+    value: float
+    timestamp: datetime
+    metadata: dict[str, Any]
+    ingested_at: datetime
+
+
+# ============================================================
+# KAFKA MESSAGE MODELS
+# ============================================================
+
+class TelemetryRawMessage(BaseModel):
+    """
+    Schema for messages on the telemetry.raw Kafka topic.
+    Same as TelemetryEventCreate — the API publishes the validated request as-is.
+    """
+
+    device_id: UUID
+    metric_type: str
+    value: float
+    timestamp: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class TelemetryEnrichedMessage(BaseModel):
+    """
+    Schema for messages on the telemetry.enriched Kafka topic.
+    """
+
+    event_id: UUID
+    device_id: UUID
+    metric_type: str
+    value: float
+    timestamp: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    # Enrichment fields
+    device_type: str | None = None
+    device_location: str | None = None
+    firmware_version: str | None = None
+
+
+# ============================================================
+# API RESPONSE ENVELOPE
+# ============================================================
+
+class APIResponse(BaseModel):
+    """Envelope for single-resource responses."""
+    success: bool
+    message: str | None = None
+    data: Any = None
+
+
+class APIListResponse(BaseModel):
+    """Envelope for list responses."""
+    success: bool
+    message: str | None = None
+    data: list[Any] = []
+    count: int = 0
+
