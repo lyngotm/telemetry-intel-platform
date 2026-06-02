@@ -1,0 +1,43 @@
+# Simulator configuration
+api_url: "http://localhost:8000"
+
+# How often to send readings (seconds between batches)
+send_interval: 2.0
+
+# Number of events to send per batch (one per device per metric)
+# With 10 devices × 4 metrics = 40 events per batch
+devices_count: 10
+
+# Metric definitions: normal distribution parameters
+# Each device generates readings for all metric types
+metrics:
+  temperature:
+    mean: 65.0
+    stddev: 5.0
+    unit: "celsius"
+  humidity:
+    mean: 45.0
+    stddev: 8.0
+    unit: "percent"
+  pressure:
+    mean: 1013.0
+    stddev: 3.0
+    unit: "hPa"
+  cpu_usage:
+    mean: 35.0
+    stddev: 10.0
+    unit: "percent"
+
+# Anomaly injection configuration
+# When enabled, one device will produce anomalous readings
+anomaly:
+  enabled: false
+  # Which device index (0-9) should produce anomalies
+  device_index: 3
+  # Which metric to make anomalous
+  metric_type: "temperature"
+  # How many standard deviations above/below normal
+  deviation_multiplier: 4.5
+  # Start injecting after this many seconds
+  start_after_seconds: 30
+  

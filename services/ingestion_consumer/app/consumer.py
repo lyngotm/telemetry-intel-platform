@@ -1,0 +1,131 @@
+"""
+Message processing logic for the Ingestion Consumer.
+
+For each message from telemetry.raw:
+1. Parse and validate the JSON payload against the Pydantic schema
+2. Write the validated event to PostgreSQL (telemetry_events table)
+3. Publish the enriched event to telemetry.enriched
+4. On any validation failure, route to telemetry.dlq
+"""
+
+import json
+import logging
+from uuid import uuid4
+
+import asyncpg
+from aiokafka import AIOKafkaProducer
+from pydantic import ValidationError
+
+from services.ingestion_consumer.app.config import settings
+from shared.models.models import TelemetryRawMessage, TelemetryEnrichedMessage
+
+logger = logging.getLogger("ingestion_consumer")
+
+
+async def process_message(
+    message,
+    db_pool: asyncpg.Pool,
+    producer: AIOKafkaProducer,
+) -> None:
+    """
+    Process a single message from the telemetry.raw topic.
+    Validates, persists to PostgreSQL, and publishes to the enriched topic.
+    On failure, routes to the dead-letter queue.
+    """
+    raw_value = message.value  # Already decoded to str by the consumer's deserializer
+
+    # --- Step 1: Parse and validate ---
+    try:
+        event = TelemetryRawMessage.model_validate_json(raw_value)
+    except (ValidationError, json.JSONDecodeError) as e:
+        # Invalid message — send to DLQ
+        await send_to_dlq(
+            producer=producer,
+            original_payload=raw_value,
+            error_reason=f"Schema validation failed: {str(e)}",
+        )
+        return
+
+    # --- Step 2: Write to PostgreSQL ---
+    event_id = uuid4()
+
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO telemetry_events (event_id, device_id, metric_type, value, timestamp, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                """,
+                event_id,
+                event.device_id,
+                event.metric_type,
+                event.value,
+                event.timestamp,
+                json.dumps(event.metadata),
+            )
+    except asyncpg.ForeignKeyViolationError:
+        # device_id doesn't exist in the devices table
+        await send_to_dlq(
+            producer=producer,
+            original_payload=raw_value,
+            error_reason=f"Foreign key violation: device {event.device_id} not registered",
+        )
+        return
+    except Exception as e:
+        # Unexpected DB error — log and send to DLQ rather than crashing
+        logger.error(f"Database write failed: {e}", exc_info=True)
+        await send_to_dlq(
+            producer=producer,
+            original_payload=raw_value,
+            error_reason=f"Database error: {str(e)}",
+        )
+        return
+
+    # --- Step 3: Publish to telemetry.enriched ---
+    enriched_event = TelemetryEnrichedMessage(
+        event_id=event_id,
+        device_id=event.device_id,
+        metric_type=event.metric_type,
+        value=event.value,
+        timestamp=event.timestamp,
+        metadata=event.metadata,
+        # Enrichment fields are None for now (Week 2 adds Redis lookup)
+        device_type=None,
+        device_location=None,
+        firmware_version=None,
+    )
+
+    await producer.send_and_wait(
+        topic=settings.kafka_topic_enriched,
+        value=enriched_event.model_dump_json(),
+        key=str(event.device_id).encode("utf-8"),
+    )
+
+    logger.info(
+        f"Processed event: id={event_id}, device={event.device_id}, "
+        f"metric={event.metric_type}, value={event.value}"
+    )
+
+
+async def send_to_dlq(
+    producer: AIOKafkaProducer,
+    original_payload: str,
+    error_reason: str,
+) -> None:
+    """
+    Send a failed message to the dead-letter queue topic.
+    Includes the original payload and the reason for failure.
+    """
+    dlq_message = json.dumps({
+        "original_payload": original_payload,
+        "error_reason": error_reason,
+        "original_topic": settings.kafka_topic_raw,
+    })
+
+    await producer.send_and_wait(
+        topic=settings.kafka_topic_dlq,
+        value=dlq_message,
+    )
+
+    logger.warning(f"Sent to DLQ: {error_reason}")
+    

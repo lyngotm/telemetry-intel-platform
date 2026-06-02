@@ -1,0 +1,82 @@
+services:
+  # --- PostgreSQL ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: tip-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Runs init.sql on first startup to create schema
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telemetry_user} -d ${POSTGRES_DB:-telemetry}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Zookeeper (required by Kafka) ---
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: tip-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Kafka Broker ---
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: tip-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Two listeners: one for internal docker traffic, one for host machine access
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9093:9093"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # --- Topic Initialization ---
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: tip-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo 'Creating Kafka topics...'
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.raw --partitions 3 --replication-factor 1
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.enriched --partitions 3 --replication-factor 1
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.dlq --partitions 1 --replication-factor 1
+      echo 'Topics created:'
+      kafka-topics --list --bootstrap-server kafka:9092
+      echo 'Done.'
+      "
+
+volumes:
+  postgres_data:
+  
