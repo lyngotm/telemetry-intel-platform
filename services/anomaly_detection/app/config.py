@@ -1,6 +1,5 @@
 """
-Configuration for the API Gateway service.
-Loads settings from environment variables (with .env file support).
+Configuration for the Anomaly Detection Service.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
 
     # PostgreSQL
@@ -22,27 +21,29 @@ class Settings(BaseSettings):
 
     # Kafka
     kafka_bootstrap_servers: str = "localhost:9093"
-    kafka_topic_raw: str = "telemetry.raw"
     kafka_topic_enriched: str = "telemetry.enriched"
-    kafka_topic_dlq: str = "telemetry.dlq"
-
-    # API
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    kafka_topic_anomalies: str = "anomalies.detected"
+    kafka_consumer_group: str = "anomaly-detection-group"
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
     log_level: str = "INFO"
 
+        # Anomaly detection parameters
+    window_size_seconds: int = 300  # 5-minute rolling window
+    min_window_samples: int = 10   # Minimum readings before computing z-score
+    z_score_threshold_low: float = 2.0
+    z_score_threshold_medium: float = 2.5
+    z_score_threshold_high: float = 3.0
+    z_score_threshold_critical: float = 4.0
+
     @property
     def database_url(self) -> str:
-        """Constructs the asyncpg connection string."""
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
 
-# Singleton instance — import this wherever you need config
 settings = Settings()

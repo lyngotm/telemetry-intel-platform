@@ -4,16 +4,23 @@ POST publishes to Kafka (async processing).
 GET queries PostgreSQL directly (no cache until Redis added).
 """
 
+import hashlib
+import json
 import logging
 from datetime import datetime
 from uuid import UUID
 
 import asyncpg
+import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from services.api_gateway.app.config import settings
-from services.api_gateway.app.dependencies import get_db_connection, get_kafka_producer
+from services.api_gateway.app.dependencies import (
+    get_db_connection,
+    get_kafka_producer,
+    get_redis_client,
+)
 from shared.models.models import (
     APIListResponse,
     APIResponse,
@@ -89,6 +96,7 @@ async def query_telemetry(
     limit: int = 100,
     offset: int = 0,
     conn: asyncpg.Connection = Depends(get_db_connection),
+    redis_client: aioredis.Redis = Depends(get_redis_client),
 ):
     """
     Query historical telemetry events with optional filters.
@@ -102,10 +110,23 @@ async def query_telemetry(
     - limit: max results (default 100, max 1000)
     - offset: pagination offset
     """
-    # Cap limit to prevent accidental full-table scans
     limit = min(limit, 1000)
 
-    # Build query dynamically based on provided filters
+    # --- Cache-aside: check Redis first ---
+    cache_key = _build_cache_key(device_id, metric_type, start, end, limit, offset)
+
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            logger.debug(f"Cache HIT: {cache_key}")
+            return APIListResponse.model_validate_json(cached)
+    except Exception as e:
+        # Redis unavailable — fall through to PostgreSQL
+        logger.warning(f"Redis cache read failed: {e}")
+
+    logger.debug(f"Cache MISS: {cache_key}")
+
+    # --- Cache miss: query PostgreSQL ---
     conditions = []
     params = []
     param_idx = 1
@@ -143,11 +164,8 @@ async def query_telemetry(
 
     rows = await conn.fetch(query, *params)
 
-    # Get total count for pagination info
     count_query = f"SELECT COUNT(*) FROM telemetry_events {where_clause}"
-    total = await conn.fetchval(count_query, *params[:-2])  # Exclude limit/offset
-
-    import json
+    total = await conn.fetchval(count_query, *params[:-2])
 
     events = [
         TelemetryEventResponse(
@@ -162,9 +180,37 @@ async def query_telemetry(
         for row in rows
     ]
 
-    return APIListResponse(
+    response = APIListResponse(
         success=True,
         data=[e.model_dump(mode="json") for e in events],
         count=total,
     )
+
+    # --- Populate cache (best effort — don't fail the request if Redis is down) ---
+    try:
+        await redis_client.set(cache_key, response.model_dump_json(), ex=60)
+        logger.debug(f"Cached response: {cache_key} (TTL: 60s)")
+    except Exception as e:
+        logger.warning(f"Redis cache write failed: {e}")
+
+    return response
+
+
+def _build_cache_key(
+    device_id: UUID | None,
+    metric_type: str | None,
+    start: datetime | None,
+    end: datetime | None,
+    limit: int,
+    offset: int,
+) -> str:
+    """
+    Build a deterministic cache key from query parameters.
+    Uses an MD5 hash of the sorted parameters to keep the key short
+    while still being unique per query combination.
+    """
+    raw = f"{device_id}:{metric_type}:{start}:{end}:{limit}:{offset}"
+    query_hash = hashlib.md5(raw.encode()).hexdigest()
+    return f"cache:telemetry:{query_hash}"
+
 

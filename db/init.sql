@@ -1,15 +1,12 @@
 -- Telemetry Intelligence Platform — Initial Schema
 -- This file runs automatically on first PostgreSQL container startup.
 
--- Enable UUID generation
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- ============================================================
 -- DEVICES TABLE
 -- Registry of all known telemetry-producing devices.
 -- ============================================================
 CREATE TABLE devices (
-    device_id       UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     device_name     VARCHAR(255) NOT NULL,
     device_type     VARCHAR(100) NOT NULL,
     location        VARCHAR(255),
@@ -28,7 +25,7 @@ CREATE INDEX idx_devices_type ON devices(device_type);
 -- Parent table defines the schema; child partitions hold the data.
 -- ============================================================
 CREATE TABLE telemetry_events (
-    event_id        UUID NOT NULL DEFAULT uuid_generate_v4(),
+    event_id        UUID NOT NULL DEFAULT gen_random_uuid(),
     device_id       UUID NOT NULL REFERENCES devices(device_id),
     metric_type     VARCHAR(100) NOT NULL,
     value           DOUBLE PRECISION NOT NULL,
@@ -58,7 +55,7 @@ CREATE INDEX idx_telemetry_metric_type ON telemetry_events(metric_type, timestam
 -- Tracks messages that failed validation in the Ingestion Consumer.
 -- ============================================================
 CREATE TABLE dead_letter_events (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     original_topic  VARCHAR(100) NOT NULL,
     original_payload JSONB NOT NULL,
     error_reason    TEXT NOT NULL,
@@ -67,3 +64,27 @@ CREATE TABLE dead_letter_events (
 
 -- Index for recent failures (most common query pattern for debugging)
 CREATE INDEX idx_dlq_failed_at ON dead_letter_events(failed_at DESC);
+
+-- ============================================================
+-- Migration 002: Create anomalies table for the Anomaly Detection Service
+-- Stores detected anomalies with statistical context for downstream diagnosis.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS anomalies (
+    anomaly_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id UUID NOT NULL REFERENCES devices(device_id),
+    metric_type VARCHAR(100) NOT NULL,
+    observed_value DOUBLE PRECISION NOT NULL,
+    expected_range JSONB NOT NULL,
+    z_score DOUBLE PRECISION NOT NULL,
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_anomalies_device_id ON anomalies(device_id);
+CREATE INDEX IF NOT EXISTS idx_anomalies_detected_at ON anomalies(detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anomalies_device_time ON anomalies(device_id, detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anomalies_severity ON anomalies(severity);
+

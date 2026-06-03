@@ -5,15 +5,17 @@ API Gateway — main application entry point.
 from contextlib import asynccontextmanager
 
 import asyncpg
+import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 from fastapi import FastAPI
 
 from services.api_gateway.app.config import settings
-from shared.logging_config import setup_logging
+from services.api_gateway.app.routers.anomalies import router as anomalies_router
 from services.api_gateway.app.routers.devices import router as devices_router
 from services.api_gateway.app.routers.telemetry import router as telemetry_router
+from shared.logging_config import setup_logging
 
-logger = setup_logging("api_gateway")
+logger = setup_logging("api_gateway", settings.log_level.upper())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,11 +40,19 @@ async def lifespan(app: FastAPI):
     )
     await app.state.kafka_producer.start()
 
-    logger.info(f"API Gateway started. Kafka: {settings.kafka_bootstrap_servers}")
+    # Redis client for cache-aside pattern
+    app.state.redis_client = aioredis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+    )
+
+    logger.info(f"API Gateway started. Kafka: {settings.kafka_bootstrap_servers}, Redis: {settings.redis_url}")
+
     yield  # App is running and serving requests
 
     # --- Shutdown ---
     await app.state.kafka_producer.stop()
+    await app.state.redis_client.aclose()
     await app.state.db_pool.close()
     logger.info("API Gateway shut down.")
 
@@ -55,6 +65,7 @@ app = FastAPI(
 )
 app.include_router(devices_router)
 app.include_router(telemetry_router)
+app.include_router(anomalies_router)
 
 @app.get("/health")
 async def health_check():

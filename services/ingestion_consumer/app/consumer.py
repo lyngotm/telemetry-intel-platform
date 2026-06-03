@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from services.ingestion_consumer.app.config import settings
 from shared.models.models import TelemetryRawMessage, TelemetryEnrichedMessage
+from services.ingestion_consumer.app.enrichment import DeviceEnrichment
 
 logger = logging.getLogger("ingestion_consumer")
 
@@ -26,6 +27,7 @@ async def process_message(
     message,
     db_pool: asyncpg.Pool,
     producer: AIOKafkaProducer,
+    enrichment: DeviceEnrichment,
 ) -> None:
     """
     Process a single message from the telemetry.raw topic.
@@ -46,7 +48,19 @@ async def process_message(
         )
         return
 
-    # --- Step 2: Write to PostgreSQL ---
+    # --- Step 2: Enrich with device metadata ---
+    device_metadata = await enrichment.get_device_metadata(event.device_id)
+
+    if device_metadata is None:
+        # Device not found in PostgreSQL — route to DLQ
+        await send_to_dlq(
+            producer=producer,
+            original_payload=raw_value,
+            error_reason=f"Device {event.device_id} not found during enrichment",
+        )
+        return
+
+    # --- Step 3: Write to PostgreSQL ---
     event_id = uuid4()
 
     try:
@@ -81,7 +95,7 @@ async def process_message(
         )
         return
 
-    # --- Step 3: Publish to telemetry.enriched ---
+    # --- Step 4: Publish to telemetry.enriched ---
     enriched_event = TelemetryEnrichedMessage(
         event_id=event_id,
         device_id=event.device_id,
@@ -89,10 +103,9 @@ async def process_message(
         value=event.value,
         timestamp=event.timestamp,
         metadata=event.metadata,
-        # Enrichment fields are None for now (Week 2 adds Redis lookup)
-        device_type=None,
-        device_location=None,
-        firmware_version=None,
+        device_type=device_metadata.get("device_type") or None,
+        device_location=device_metadata.get("location") or None,
+        firmware_version=device_metadata.get("firmware_version") or None,
     )
 
     await producer.send_and_wait(
@@ -103,7 +116,8 @@ async def process_message(
 
     logger.info(
         f"Processed event: id={event_id}, device={event.device_id}, "
-        f"metric={event.metric_type}, value={event.value}"
+        f"metric={event.metric_type}, value={event.value}, "
+        f"device_type={device_metadata.get('device_type')}"
     )
 
 

@@ -6,6 +6,7 @@ Supports configurable anomaly injection for testing the detection pipeline.
 """
 
 import asyncio
+import signal
 import logging
 import sys
 import time
@@ -101,7 +102,7 @@ async def run_simulator():
     # it reuses TCP connections across requests instead of opening a new one each time,
     # which is significantly faster when sending hundreds of events per batch.
     async with httpx.AsyncClient(base_url=api_url, timeout=30.0) as client:
-        # Step 1: Register devices
+        # Register devices...
         logger.info(f"Registering {config['devices_count']} devices...")
         device_ids = await register_devices(client, config["devices_count"])
 
@@ -110,66 +111,77 @@ async def run_simulator():
             sys.exit(1)
 
         logger.info(f"Starting telemetry generation. Interval: {send_interval}s")
-        logger.info(f"Anomaly injection: {'ENABLED' if anomaly_config['enabled'] else 'DISABLED'}")
+
+        # Graceful shutdown via signal handler
+        shutdown_event = asyncio.Event()
+
+        def handle_shutdown():
+            shutdown_event.set()
+
+        loop = asyncio.get_running_loop()
+        loop.add_signal_handler(signal.SIGINT, handle_shutdown)
+        loop.add_signal_handler(signal.SIGTERM, handle_shutdown)
 
         start_time = time.time()
         events_sent = 0
         events_failed = 0
 
-        # Step 2: Generate and send telemetry in a loop
-        try:
-            while True:
-                elapsed = time.time() - start_time
-                batch_tasks = []
+        while not shutdown_event.is_set():
+            elapsed = time.time() - start_time
+            batch_tasks = []
 
-                for device_idx, device_id in enumerate(device_ids):
-                    for metric_type, metric_cfg in metrics_config.items():
-                        # Determine if this reading should be anomalous
-                        is_anomaly = (
-                            anomaly_config["enabled"]
-                            and device_idx == anomaly_config["device_index"]
-                            and metric_type == anomaly_config["metric_type"]
-                            and elapsed > anomaly_config["start_after_seconds"]
-                        )
+            for device_idx, device_id in enumerate(device_ids):
+                for metric_type, metric_cfg in metrics_config.items():
+                    is_anomaly = (
+                        anomaly_config["enabled"]
+                        and device_idx == anomaly_config["device_index"]
+                        and metric_type == anomaly_config["metric_type"]
+                        and elapsed > anomaly_config["start_after_seconds"]
+                    )
 
-                        value = generate_reading(
-                            metric_cfg,
-                            is_anomaly=is_anomaly,
-                            deviation_multiplier=anomaly_config.get("deviation_multiplier", 4.5),
-                        )
+                    value = generate_reading(
+                        metric_cfg,
+                        is_anomaly=is_anomaly,
+                        deviation_multiplier=anomaly_config.get("deviation_multiplier", 4.5),
+                    )
 
-                        payload = {
-                            "device_id": str(device_id),
-                            "metric_type": metric_type,
-                            "value": value,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "metadata": {"unit": metric_cfg["unit"]},
-                        }
+                    payload = {
+                        "device_id": str(device_id),
+                        "metric_type": metric_type,
+                        "value": value,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "metadata": {"unit": metric_cfg["unit"]},
+                    }
 
-                        batch_tasks.append(send_event(client, payload))
+                    batch_tasks.append(send_event(client, payload))
 
-                # Send all events in this batch concurrently
-                results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+            results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
-                for result in results:
-                    if isinstance(result, Exception):
-                        events_failed += 1
-                    else:
-                        events_sent += 1
+            for result in results:
+                if isinstance(result, Exception):
+                    events_failed += 1
+                else:
+                    events_sent += 1
 
-                logger.info(
-                    f"Batch sent: {len(batch_tasks)} events | "
-                    f"Total sent: {events_sent} | Failed: {events_failed} | "
-                    f"Elapsed: {elapsed:.0f}s"
-                    + (" | ANOMALY ACTIVE" if anomaly_config["enabled"] and elapsed > anomaly_config["start_after_seconds"] else "")
-                )
-
-                await asyncio.sleep(send_interval)
-
-        except KeyboardInterrupt:
             logger.info(
-                f"Simulator stopped. Total events sent: {events_sent}, failed: {events_failed}"
+                f"Batch sent: {len(batch_tasks)} events | "
+                f"Total sent: {events_sent} | Failed: {events_failed} | "
+                f"Elapsed: {elapsed:.0f}s"
+                + (" | ANOMALY ACTIVE" if anomaly_config["enabled"] and elapsed > anomaly_config["start_after_seconds"] else "")
             )
+
+            # Use wait_for so shutdown_event can interrupt the sleep
+            try:
+                await asyncio.wait_for(shutdown_event.wait(), timeout=send_interval)
+            except asyncio.TimeoutError:
+                pass  # Normal — timeout means "keep going"
+
+        logger.info(
+            f"Simulator stopped. Total events sent: {events_sent}, failed: {events_failed}"
+        )
+
+        await print_anomaly_summary(client, device_ids, config)
+    
 
 
 async def send_event(client: httpx.AsyncClient, payload: dict) -> None:
@@ -177,6 +189,46 @@ async def send_event(client: httpx.AsyncClient, payload: dict) -> None:
     response = await client.post("/api/v1/telemetry", json=payload)
     if response.status_code != 202:
         raise Exception(f"API returned {response.status_code}: {response.text}")
+
+
+async def print_anomaly_summary(client: httpx.AsyncClient, device_ids: list[UUID], config: dict):
+    """
+    After simulation ends, query the anomalies API to show what was detected.
+    Provides a quick verification that the detection pipeline is working.
+    """
+    anomaly_config = config["anomaly"]
+    if not anomaly_config["enabled"]:
+        return
+
+    logger.info("--- Anomaly Injection Summary ---")
+    anomaly_device_id = device_ids[anomaly_config["device_index"]]
+    logger.info(f"Injected anomalies on device: {anomaly_device_id}")
+    logger.info(f"Metric: {anomaly_config['metric_type']}, Deviation: {anomaly_config['deviation_multiplier']}σ")
+
+    # Query the anomalies API for this device
+    try:
+        response = await client.get(
+            "/api/v1/anomalies",
+            params={"device_id": str(anomaly_device_id)},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            count = data.get("count", 0)
+            anomalies = data.get("data", [])
+            logger.info(f"Anomalies detected: {count}")
+            for a in anomalies[:5]:  # Show first 5
+                logger.info(
+                    f"  [{a['severity'].upper()}] value={a['observed_value']}, "
+                    f"z_score={a['z_score']:.2f}, detected_at={a['detected_at']}"
+                )
+            if count > 5:
+                logger.info(f"  ... and {count - 5} more")
+        else:
+            logger.warning(f"Could not fetch anomalies: {response.status_code}")
+    except Exception as e:
+        logger.warning(f"Anomaly summary failed (API may be down): {e}")
+
+    logger.info("--- End Summary ---")
 
 
 if __name__ == "__main__":
