@@ -29,15 +29,17 @@ services:
     ports:
       - "2181:2181"
     healthcheck:
-      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      test: ["CMD-SHELL", "echo srvr | nc localhost 2181 | grep Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   # --- Kafka Broker ---
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     container_name: tip-kafka
+    restart: on-failure
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -72,11 +74,27 @@ services:
       kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.raw --partitions 3 --replication-factor 1
       kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.enriched --partitions 3 --replication-factor 1
       kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.dlq --partitions 1 --replication-factor 1
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic anomalies.detected --partitions 3 --replication-factor 1
       echo 'Topics created:'
       kafka-topics --list --bootstrap-server kafka:9092
       echo 'Done.'
       "
+  # --- Redis ---
+  redis:
+    image: redis:7-alpine
+    container_name: tip-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_data:
+  redis_data:
+
   

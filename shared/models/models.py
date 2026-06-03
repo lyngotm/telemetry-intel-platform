@@ -125,6 +125,27 @@ class TelemetryEnrichedMessage(BaseModel):
     firmware_version: str | None = None
 
 
+class AnomalyDetectedMessage(BaseModel):
+    """
+    Schema for messages on the anomalies.detected Kafka topic.
+    Published by the Anomaly Detection Service when a z-score threshold is breached.
+    Consumed by the Diagnosis Service (Week 5) to trigger RAG-based root-cause analysis.
+    """
+
+    anomaly_id: UUID
+    device_id: UUID
+    metric_type: str
+    observed_value: float
+    expected_range: dict[str, Any]
+    z_score: float
+    severity: str = Field(..., pattern="^(low|medium|high|critical)$")
+    detected_at: datetime
+
+    # Device context (carried from the enriched event for downstream convenience)
+    device_type: str | None = None
+    device_location: str | None = None
+
+
 # ============================================================
 # API RESPONSE ENVELOPE
 # ============================================================
@@ -143,3 +164,17 @@ class APIListResponse(BaseModel):
     data: list[Any] = []
     count: int = 0
 
+class AnomalyResponse(BaseModel):
+    """Anomaly record as returned by the API."""
+
+    anomaly_id: UUID
+    device_id: UUID
+    metric_type: str
+    observed_value: float
+    expected_range: dict[str, Any]
+    z_score: float
+    severity: str
+    detected_at: datetime
+    status: str
+    created_at: datetime
+    

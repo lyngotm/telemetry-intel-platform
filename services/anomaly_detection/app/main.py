@@ -1,37 +1,35 @@
 """
-Ingestion Consumer — reads from telemetry.raw, validates, persists to PostgreSQL,
-and publishes enriched events to telemetry.enriched.
+Anomaly Detection Service — consumes enriched telemetry events, maintains
+rolling statistical windows in Redis, and detects anomalies via z-score.
 """
 
 import asyncio
-import signal
 import logging
+import signal
 
 import asyncpg
+import redis.asyncio as aioredis
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
-from services.ingestion_consumer.app.config import settings
-from services.ingestion_consumer.app.consumer import process_message
-import redis.asyncio as aioredis
-from services.ingestion_consumer.app.enrichment import DeviceEnrichment
+from services.anomaly_detection.app.config import settings
+from services.anomaly_detection.app.detector import process_event
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 # Only set DEBUG for our code
-logging.getLogger("ingestion_consumer").setLevel(
+logging.getLogger("anomaly_detection").setLevel(
     getattr(logging, settings.log_level.upper(), logging.INFO))
 
-logger = logging.getLogger("ingestion_consumer")
+logger = logging.getLogger("anomaly_detection")
 
 
-async def run_consumer():
+async def run_service():
     """
-    Main entry point for the Ingestion Consumer.
-    Connects to Kafka and PostgreSQL, then processes messages in a loop.
+    Main entry point for the Anomaly Detection Service.
+    Connects to Kafka, Redis, and PostgreSQL, then processes enriched events.
     """
     # --- Setup resources ---
     db_pool = await asyncpg.create_pool(
@@ -42,20 +40,15 @@ async def run_consumer():
 
     redis_client = aioredis.from_url(
         settings.redis_url,
-        decode_responses=True,  # Return strings instead of bytes
+        decode_responses=True,
     )
 
-    enrichment = DeviceEnrichment(redis_client=redis_client, db_pool=db_pool)
-
     consumer = AIOKafkaConsumer(
-        settings.kafka_topic_raw,
+        settings.kafka_topic_enriched,
         bootstrap_servers=settings.kafka_bootstrap_servers,
         group_id=settings.kafka_consumer_group,
-        # Don't auto-commit — we commit manually after successful processing
         enable_auto_commit=False,
-        # Start from earliest unprocessed message if no committed offset exists
         auto_offset_reset="earliest",
-        # Deserialize message values from bytes to string
         value_deserializer=lambda v: v.decode("utf-8"),
     )
 
@@ -67,8 +60,10 @@ async def run_consumer():
     await consumer.start()
     await producer.start()
     logger.info(
-        f"Ingestion Consumer started. "
-        f"Consuming: {settings.kafka_topic_raw}, Group: {settings.kafka_consumer_group}"
+        f"Anomaly Detection Service started. "
+        f"Consuming: {settings.kafka_topic_enriched}, "
+        f"Group: {settings.kafka_consumer_group}, "
+        f"Window: {settings.window_size_seconds}s"
     )
 
     # --- Graceful shutdown handling ---
@@ -85,35 +80,30 @@ async def run_consumer():
     # --- Main processing loop ---
     try:
         while not shutdown_event.is_set():
-            # Fetch a batch of messages (waits up to 1 second)
             batch = await consumer.getmany(timeout_ms=1000, max_records=100)
 
             for topic_partition, messages in batch.items():
                 for message in messages:
-                    await process_message(
+                    await process_event(
                         message=message,
+                        redis_client=redis_client,
                         db_pool=db_pool,
                         producer=producer,
-                        enrichment=enrichment,
                     )
 
-            # Commit offsets after the batch is fully processed
-            # If we crash before this, messages get reprocessed (at-least-once)
             if batch:
                 await consumer.commit()
 
     except Exception as e:
-        logger.error(f"Consumer error: {e}", exc_info=True)
+        logger.error(f"Anomaly Detection Service error: {e}", exc_info=True)
     finally:
-        # --- Cleanup ---
-        logger.info("Shutting down consumer...")
+        logger.info("Shutting down Anomaly Detection Service...")
         await consumer.stop()
         await producer.stop()
         await redis_client.aclose()
         await db_pool.close()
-        logger.info("Ingestion Consumer stopped.")
+        logger.info("Anomaly Detection Service stopped.")
 
 
 if __name__ == "__main__":
-    asyncio.run(run_consumer())
-    
+    asyncio.run(run_service())

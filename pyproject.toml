@@ -28,6 +28,9 @@ dependencies = [
     # Numerical (simulator normal distributions)
     "numpy>=2.1.0",
     "pyyaml>=6.0",
+
+    # Redis (async cache + state)
+    "redis>=5.0.0",
 ]
 
 [dependency-groups]
@@ -38,7 +41,7 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "services/api_gateway/tests", "services/ingestion_consumer/tests"]
+testpaths = ["tests", "services/api_gateway/tests", "services/ingestion_consumer/tests", "services/anomaly_detection/tests"]
 
 [tool.ruff]
 line-length = 100

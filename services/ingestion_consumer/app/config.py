@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     kafka_topic_dlq: str = "telemetry.dlq"
     kafka_consumer_group: str = "ingestion-consumer-group"
 
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+    
+    log_level: str = "INFO"
+    
     @property
     def database_url(self) -> str:
         return (
