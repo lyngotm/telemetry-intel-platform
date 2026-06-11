@@ -15,6 +15,8 @@ import asyncpg
 import httpx
 import pytest
 
+pytestmark = pytest.mark.integration
+
 API_BASE_URL = "http://localhost:8000"
 POSTGRES_DSN = "postgresql://telemetry_user:telemetry_pass@localhost:5432/telemetry"
 
@@ -22,6 +24,13 @@ POSTGRES_DSN = "postgresql://telemetry_user:telemetry_pass@localhost:5432/teleme
 @pytest.fixture
 async def api_client():
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
+        # Authenticate the client for all subsequent requests
+        response = await client.post(
+            "/api/v1/auth/token",
+            json={"username": "operator", "password": "operator123"},
+        )
+        token = response.json()["access_token"]
+        client.headers["Authorization"] = f"Bearer {token}"
         yield client
 
 

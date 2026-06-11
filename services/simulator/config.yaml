@@ -1,6 +1,10 @@
 # Simulator configuration
 api_url: "http://localhost:8000"
 
+# Authentication
+auth_username: "operator"
+auth_password: "operator123"
+
 # How often to send readings (seconds between batches)
 send_interval: 2.0
 

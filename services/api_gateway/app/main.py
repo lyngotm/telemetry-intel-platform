@@ -13,6 +13,7 @@ from services.api_gateway.app.config import settings
 from services.api_gateway.app.routers.anomalies import router as anomalies_router
 from services.api_gateway.app.routers.devices import router as devices_router
 from services.api_gateway.app.routers.telemetry import router as telemetry_router
+from services.api_gateway.app.routers.auth import router as auth_router
 from shared.logging_config import setup_logging
 
 logger = setup_logging("api_gateway", settings.log_level.upper())
@@ -63,6 +64,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.include_router(auth_router)
 app.include_router(devices_router)
 app.include_router(telemetry_router)
 app.include_router(anomalies_router)

@@ -178,3 +178,27 @@ class AnomalyResponse(BaseModel):
     status: str
     created_at: datetime
     
+
+# ============================================================
+# AUTH MODELS
+# ============================================================
+
+class UserPayload(BaseModel):
+    """
+    Represents the decoded JWT payload (claims).
+    Extracted from the token on every authenticated request.
+    """
+
+    username: str
+    role: str = Field(..., pattern="^(admin|operator|viewer)$")
+    exp: datetime | None = None
+
+
+class TokenResponse(BaseModel):
+    """Response body for POST /api/v1/auth/token."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int  # seconds until expiry
+    role: str
+

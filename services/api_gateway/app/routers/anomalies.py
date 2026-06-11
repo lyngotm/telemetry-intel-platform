@@ -12,7 +12,9 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from services.api_gateway.app.dependencies import get_db_connection
-from shared.models.models import APIListResponse, APIResponse, AnomalyResponse
+from services.api_gateway.app.rate_limiter import require_rate_limit
+from services.api_gateway.app.rbac import require_role
+from shared.models.models import AnomalyResponse, APIListResponse, APIResponse, UserPayload
 
 logger = logging.getLogger("api_gateway")
 
@@ -32,6 +34,8 @@ async def list_anomalies(
     limit: int = 100,
     offset: int = 0,
     conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("viewer")),
+    _rate_limit: None = Depends(require_rate_limit("query")),
 ):
     """
     Query detected anomalies with optional filters.
@@ -125,6 +129,8 @@ async def list_anomalies(
 async def get_anomaly(
     anomaly_id: UUID,
     conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("viewer")),
+    _rate_limit: None = Depends(require_rate_limit("query")),
 ):
     """
     Retrieve a single anomaly by ID.

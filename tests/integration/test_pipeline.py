@@ -16,6 +16,8 @@ import httpx
 import pytest
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
+pytestmark = pytest.mark.integration
+
 # Adjust these if your local setup differs
 API_BASE_URL = "http://localhost:8000"
 POSTGRES_DSN = "postgresql://telemetry_user:telemetry_pass@localhost:5432/telemetry"
@@ -26,6 +28,12 @@ KAFKA_BOOTSTRAP = "localhost:9093"
 async def api_client():
     """Provides an async HTTP client for the API Gateway."""
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
+        response = await client.post(
+            "/api/v1/auth/token",
+            json={"username": "operator", "password": "operator123"},
+        )
+        token = response.json()["access_token"]
+        client.headers["Authorization"] = f"Bearer {token}"
         yield client
 
 
