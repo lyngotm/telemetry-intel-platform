@@ -9,7 +9,15 @@ import asyncpg
 from fastapi import APIRouter, Depends, status
 
 from services.api_gateway.app.dependencies import get_db_connection
-from shared.models.models import APIResponse, APIListResponse, DeviceCreate, DeviceResponse
+from services.api_gateway.app.rate_limiter import require_rate_limit
+from services.api_gateway.app.rbac import require_role
+from shared.models.models import (
+    APIListResponse,
+    APIResponse,
+    DeviceCreate,
+    DeviceResponse,
+    UserPayload,
+)
 
 logger = logging.getLogger("api_gateway")
 
@@ -24,6 +32,8 @@ router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
 async def register_device(
     device: DeviceCreate,
     conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("operator")),
+    _rate_limit: None = Depends(require_rate_limit("ingestion")),
 ):
     """
     Register a new telemetry-producing device.
@@ -70,6 +80,8 @@ async def register_device(
 async def list_devices(
     device_type: str | None = None,
     conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("viewer")),
+    _rate_limit: None = Depends(require_rate_limit("query")),
 ):
     """
     List all registered devices, optionally filtered by device_type.

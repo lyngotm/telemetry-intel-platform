@@ -33,6 +33,31 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
+async def obtain_token(client: httpx.AsyncClient, config: dict) -> str:
+    """
+    Authenticate with the API Gateway and return a JWT access token.
+    Uses operator credentials since the simulator needs to POST telemetry.
+    """
+    auth_url = "/api/v1/auth/token"
+    credentials = {
+        "username": config.get("auth_username", "operator"),
+        "password": config.get("auth_password", "operator123"),
+    }
+
+    response = await client.post(auth_url, json=credentials)
+
+    if response.status_code == 200:
+        token = response.json()["access_token"]
+        logger.info(
+            f"Authenticated as '{credentials['username']}' "
+            f"(expires in {response.json()['expires_in']}s)"
+        )
+        return token
+    else:
+        logger.error(f"Authentication failed: {response.status_code} {response.text}")
+        sys.exit(1)
+
+
 async def register_devices(client: httpx.AsyncClient, count: int) -> list[UUID]:
     """
     Register simulated devices with the API.
@@ -102,6 +127,9 @@ async def run_simulator():
     # it reuses TCP connections across requests instead of opening a new one each time,
     # which is significantly faster when sending hundreds of events per batch.
     async with httpx.AsyncClient(base_url=api_url, timeout=30.0) as client:
+        token = await obtain_token(client, config)
+        client.headers["Authorization"] = f"Bearer {token}"
+        
         # Register devices...
         logger.info(f"Registering {config['devices_count']} devices...")
         device_ids = await register_devices(client, config["devices_count"])

@@ -103,6 +103,13 @@ flowchart LR
 - GET /api/v1/anomalies and GET /api/v1/anomalies/{id} endpoints
 - Simulator with anomaly injection and post-run summary
 
+**Week 3 ✅ — Security + Hardening**
+- JWT authentication (RS256) with token issuance endpoint
+- RBAC with three-role hierarchy (viewer < operator < admin)
+- Rate limiting via Redis sliding window (1000 req/min ingestion, 100 req/min queries)
+- Resilience: cache-aside fails gracefully when Redis is down, 503 on Kafka failure
+- Simulator authenticates as operator before sending telemetry
+
 ## Quick Start
 
 ### Prerequisites
@@ -124,16 +131,16 @@ uv sync --dev
 docker compose up -d
 
 # Start the API Gateway (terminal 1)
-PYTHONPATH=. uvicorn services.api_gateway.app.main:app --reload --port 8000
+PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --port 8000
 
 # Start the Ingestion Consumer (terminal 2)
-PYTHONPATH=. python -m services.ingestion_consumer.app.main
+PYTHONPATH=. uv run python -m services.ingestion_consumer.app.main
 
 # Start the Anomaly Detection Service (terminal 3)
-PYTHONPATH=. python -m services.anomaly_detection.app.main
+PYTHONPATH=. uv run python -m services.anomaly_detection.app.main
 
 # Run the simulator (terminal 4)
-PYTHONPATH=. python -m services.simulator.app.main
+PYTHONPATH=. uv run python -m services.simulator.app.main
 ```
 
 ### Verify
@@ -142,27 +149,45 @@ PYTHONPATH=. python -m services.simulator.app.main
 # Check API health
 curl http://localhost:8000/health
 
-# Query ingested telemetry (served from Redis cache on repeated calls)
-curl "http://localhost:8000/api/v1/telemetry?limit=5"
+# Obtain a token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "operator", "password": "operator123"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Query ingested telemetry
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:8000/api/v1/telemetry?limit=5"
 
 # Query detected anomalies
-curl http://localhost:8000/api/v1/anomalies
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/anomalies
 
-# Check Redis cache keys
-docker exec tip-redis redis-cli KEYS "cache:telemetry:*"
+# Test RBAC (viewer can't POST)
+VIEWER_TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "viewer", "password": "viewer123"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# View API documentation
-open http://localhost:8000/docs
+curl -X POST -H "Authorization: Bearer $VIEWER_TOKEN" http://localhost:8000/api/v1/telemetry
+# Returns 403 Forbidden
+
+# View API documentation (open in browser)
+# Navigate to: http://localhost:8000/docs
 ```
 
 ### Run Tests
 
 ```bash
-# Unit tests (no infrastructure needed)
-PYTHONPATH=. uv run pytest -v
+# Unit tests only (no infrastructure needed)
+PYTHONPATH=. uv run pytest -v -m "not integration and not manual"
 
-# Integration tests (requires Docker services + API + Consumer running)
-PYTHONPATH=. uv run pytest tests/integration/ -v
+# Integration tests (requires full stack running: Docker services + API + consumer + detection)
+PYTHONPATH=. uv run pytest -v -m "integration and not manual"
+
+# All automated tests
+PYTHONPATH=. uv run pytest -v -m "not manual"
+
+# Manual resilience tests (stop Redis/Kafka first)
+# docker stop tip-redis tip-kafka
+PYTHONPATH=. uv run pytest -v -m "manual"
+# docker start tip-redis tip-kafka
 ```
 
 ## Project Structure
@@ -184,8 +209,8 @@ telemetry-intelligence-platform/
 ├── tests/
 │ ├── unit/                     # Pure validation tests
 │ └── integration/              # Full pipeline + cache + anomaly tests
-└── docs/
-└── decisions.md                # Architecture decision log
+├──  docs/
+│ └── decisions.md                # Architecture decision log
 ```
 
 ## API Endpoints
@@ -202,4 +227,42 @@ telemetry-intelligence-platform/
 
 Full interactive API docs available at `/docs` when the API is running.
 
+## Authentication
+
+The API uses JWT tokens (RS256) for authentication. All endpoints except `/health`, `/docs`, and `/api/v1/auth/token` require a valid token.
+
+### Obtaining a Token
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "operator", "password": "operator123"}'
+```
+
+### Using a Token
+
+Include the token in the Authorization header:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/telemetry
+```
+
+### Available Test Accounts
+
+| Username | Password | Role | Access |
+|----------|----------|------|--------|
+| admin | admin123 | admin | Full access (all endpoints) |
+| operator | operator123 | operator | Read all + write telemetry + register devices |
+| viewer | viewer123 | viewer | Read-only (GET endpoints) |
+
+
+### Token Lifetime
+
+Tokens expire after 60 minutes (configurable via `JWT_EXPIRY_MINUTES`). There is no refresh token mechanism — request a new token when the current one expires.
+
+### Rate Limits
+
+- Telemetry ingestion (POST): 1000 requests/minute per user
+- Query endpoints (GET): 100 requests/minute per user
+- Exceeded limits return 429 with a `Retry-After` header
 

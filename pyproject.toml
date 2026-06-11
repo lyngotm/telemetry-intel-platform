@@ -31,6 +31,9 @@ dependencies = [
 
     # Redis (async cache + state)
     "redis>=5.0.0",
+
+    # JWT authentication
+    "python-jose[cryptography]>=3.3.0",
 ]
 
 [dependency-groups]
@@ -41,7 +44,13 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "services/api_gateway/tests", "services/ingestion_consumer/tests", "services/anomaly_detection/tests"]
+testpaths = [
+    "tests", "services/api_gateway/tests", "services/ingestion_consumer/tests", "services/anomaly_detection/tests"
+]
+markers = [
+    "manual: tests requiring manual Docker container manipulation",
+    "integration: tests requiring running services (Docker + API + consumers)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -4,6 +4,7 @@ POST publishes to Kafka (async processing).
 GET queries PostgreSQL directly (no cache until Redis added).
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -21,11 +22,14 @@ from services.api_gateway.app.dependencies import (
     get_kafka_producer,
     get_redis_client,
 )
+from services.api_gateway.app.rate_limiter import require_rate_limit
+from services.api_gateway.app.rbac import require_role
 from shared.models.models import (
     APIListResponse,
     APIResponse,
     TelemetryEventCreate,
     TelemetryEventResponse,
+    UserPayload,
 )
 
 logger = logging.getLogger("api_gateway")
@@ -42,6 +46,8 @@ async def ingest_telemetry(
     event: TelemetryEventCreate,
     conn: asyncpg.Connection = Depends(get_db_connection),
     producer: AIOKafkaProducer = Depends(get_kafka_producer),
+    current_user: UserPayload = Depends(require_role("operator")),
+    _rate_limit: None = Depends(require_rate_limit("ingestion")),
 ):
     """
     Ingest a telemetry event.
@@ -62,17 +68,32 @@ async def ingest_telemetry(
             detail=f"Device {event.device_id} not found. Register it first via POST /api/v1/devices.",
         )
 
-    # Serialize the event to JSON and publish to Kafka
-    message_value = event.model_dump_json()
+    # Publish to Kafka (fail explicitly if Kafka is unreachable)
+    try:
+        message_value = event.model_dump_json()
 
-    await producer.send_and_wait(
-        topic=settings.kafka_topic_raw,
-        value=message_value,
-        # Use device_id as the partition key — ensures all events from one device
-        # go to the same partition, maintaining per-device ordering.
-        key=str(event.device_id).encode("utf-8"),
-    )
-
+        await asyncio.wait_for(
+            producer.send_and_wait(
+                topic=settings.kafka_topic_raw,
+                value=message_value,
+                key=str(event.device_id).encode("utf-8"),
+            ),
+            timeout=5.0,
+        )
+    except asyncio.TimeoutError:
+        logger.error("Kafka publish timed out (broker may be unreachable)")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telemetry ingestion temporarily unavailable. Please retry.",
+            headers={"Retry-After": "5"},
+        )
+    except Exception as e:
+        logger.error(f"Kafka publish failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telemetry ingestion temporarily unavailable. Please retry.",
+            headers={"Retry-After": "5"},
+        )
     logger.info(
         f"Published event to {settings.kafka_topic_raw}: "
         f"device={event.device_id}, metric={event.metric_type}, value={event.value}"
@@ -97,6 +118,8 @@ async def query_telemetry(
     offset: int = 0,
     conn: asyncpg.Connection = Depends(get_db_connection),
     redis_client: aioredis.Redis = Depends(get_redis_client),
+    current_user: UserPayload = Depends(require_role("viewer")),
+    _rate_limit: None = Depends(require_rate_limit("query")),
 ):
     """
     Query historical telemetry events with optional filters.

@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
+    # JWT Authentication
+    jwt_private_key_path: str = "keys/private.pem"
+    jwt_public_key_path: str = "keys/public.pem"
+    jwt_algorithm: str = "RS256"
+    jwt_expiry_minutes: int = 60
+
+    # Rate Limiting (requests per minute)
+    rate_limit_ingestion: int = 1000
+    rate_limit_query: int = 100
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
