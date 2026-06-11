@@ -127,6 +127,11 @@ cd telemetry-intelligence-platform
 # Install dependencies
 uv sync --dev
 
+# Generate RSA Keys (first time only)
+mkdir -p keys
+openssl genrsa -out keys/private.pem 2048
+openssl rsa -in keys/private.pem -pubout -out keys/public.pem
+
 # Start infrastructure (PostgreSQL + Kafka + Redis)
 docker compose up -d
 
