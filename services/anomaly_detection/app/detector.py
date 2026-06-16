@@ -14,7 +14,8 @@ from aiokafka import AIOKafkaProducer
 
 from services.anomaly_detection.app.config import settings
 from services.anomaly_detection.app.rolling_window import RollingWindow, WindowStats
-from shared.models.models import TelemetryEnrichedMessage, AnomalyDetectedMessage
+from shared.metrics import ANOMALIES_DETECTED, EVENTS_ANALYZED
+from shared.models.models import AnomalyDetectedMessage, TelemetryEnrichedMessage
 
 logger = logging.getLogger("anomaly_detection")
 
@@ -93,6 +94,7 @@ async def process_event(
     # --- Step 3: Compute z-score and classify ---
     z_score = compute_z_score(event.value, stats)
     severity = classify_severity(z_score)
+    EVENTS_ANALYZED.inc()
 
     logger.info(
     f"Z-SCORE CHECK: device={event.device_id}, metric={event.metric_type}, "
@@ -108,6 +110,7 @@ async def process_event(
         return
 
     # --- Step 4: Anomaly detected! ---
+    ANOMALIES_DETECTED.labels(severity=severity).inc()
     anomaly_id = uuid4()
     detected_at = datetime.now(timezone.utc)
 

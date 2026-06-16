@@ -102,3 +102,62 @@ Documenting key design decisions and their rationale as the project evolves.
 
 **Tech debt:** The Kafka publish timeout (5 seconds in `telemetry.py`) is currently hardcoded. This is sufficient for local single-broker development where normal latency is sub-millisecond, but should be promoted to a configurable environment variable (`KAFKA_PUBLISH_TIMEOUT_SECONDS`) in Week 4 when deploying to a cloud environment where cross-AZ latency and broker GC pauses could cause occasional slowness.
 
+
+## 006: Prometheus Client Library for Application Metrics
+
+**Date:** 2026-06-12
+**Status:** Accepted
+
+**Context:** Week 4 requires observability instrumentation across all three services. The API Gateway is an HTTP server (FastAPI), but the Ingestion Consumer and Anomaly Detection Service are standalone Kafka consumers with no HTTP server.
+
+**Decision:** Use `prometheus-client` with the default global registry. The API Gateway exposes `/metrics` on its existing HTTP port (8000) via a FastAPI route and uses Starlette middleware for request-level metrics. The two consumer services use `prometheus_client.start_http_server()` to spin up a lightweight metrics server on side ports (9090 for Ingestion Consumer, 9091 for Anomaly Detection).
+
+**Rationale:**
+- `prometheus-client` is the standard Python library for Prometheus instrumentation — minimal dependencies and widely documented.
+- The API Gateway already has an HTTP server, so adding a `/metrics` route is trivial (no new port needed).
+- Consumer services have no HTTP server. `start_http_server()` runs a background thread serving only `/metrics` — avoids adding a full async web framework just for one endpoint.
+- All metrics are defined in a shared module (`shared/metrics.py`) for consistency. Counters that aren't incremented by a particular service stay at 0 — cosmetically noisy but functionally harmless.
+- Metrics ports are configurable via each service's `config.py` settings.
+
+**Tradeoff:** Because all counters are defined in the shared global registry, every service's `/metrics` endpoint exposes all metric definitions (including ones it doesn't use). Prometheus won't care — it queries by metric name. If this becomes a problem, separate `CollectorRegistry()` instances per service would fix it, but adds complexity for no functional benefit at this scale.
+
+
+## 007: Multi-Stage Docker Builds with uv for Reproducible Containers
+
+**Date:** 2026-06-12
+**Status:** Accepted
+
+**Context:** Week 4 requires packaging all application services as Docker containers. Options considered for dependency installation inside containers: pip (traditional), pip with exported requirements.txt from uv.lock (hybrid), or uv directly in the build stage (modern).
+
+**Decision:** Use multi-stage Docker builds with `uv` in the builder stage and `python:3.11-slim` as the base image. The `uv` binary is copied from `ghcr.io/astral-sh/uv:latest` into the builder stage, installs dependencies via `uv sync --frozen --no-dev --no-editable`, and the resulting `.venv` is copied to the slim runtime stage. Each service has its own Dockerfile but all use the project root as build context. The simulator uses a `profiles: [simulator]` to prevent automatic startup.
+
+**Rationale:**
+- `uv sync --frozen` guarantees the exact same dependency versions as local development (uses `uv.lock`), eliminating "works on my machine" issues.
+- `uv` installs 10-100x faster than pip, significantly reducing CI/CD build times.
+- Multi-stage builds keep the `uv` binary and build tools out of the runtime image (~150-200MB final size vs ~400MB+ with build dependencies).
+- `python:3.11-slim` over Alpine avoids compilation issues with C extensions (`asyncpg`, `cryptography`).
+- Project root as build context allows all Dockerfiles to access `pyproject.toml`, `uv.lock`, and `shared/` without duplication.
+- Simulator profile prevents data flooding during debugging — must be explicitly started with `docker compose --profile simulator up`.
+
+**Tradeoff:** All services install the full dependency set (since there's one `pyproject.toml`). Individual services only use a subset — e.g., the simulator doesn't need `asyncpg`. This adds ~20-30MB per image but avoids maintaining per-service dependency files. Acceptable for this project's scale.
+
+
+## 008: Prometheus + Grafana for Observability with Auto-Provisioned Dashboards
+
+**Date:** 2026-06-14
+**Status:** Accepted
+
+**Context:** Week 4 requires live observability dashboards showing ingestion throughput, request latency, error rates, and anomaly detection metrics. The system design specifies Prometheus for metrics collection and Grafana for visualization. All three application services already expose `/metrics` endpoints (decision 006).
+
+**Decision:** Deploy Prometheus and Grafana as Docker Compose services alongside the application stack. Prometheus scrapes all three application services every 15 seconds via their Docker network hostnames. Grafana auto-provisions the Prometheus data source and three dashboards (System Overview, Ingestion Pipeline, Anomaly Detection) on startup via file-based provisioning in `monitoring/provisioning/`.
+
+**Rationale:**
+- File-based provisioning (`monitoring/provisioning/datasources/` and `monitoring/provisioning/dashboards/`) means Grafana is fully configured on first startup — no manual UI setup required. This is reproducible across environments and survives `docker compose down -v`.
+- Prometheus uses service names (`api-gateway:8000`, `ingestion-consumer:9090`, `anomaly-detection:9091`) as scrape targets, leveraging Docker Compose's built-in DNS resolution.
+- Three focused dashboards (system overview, ingestion pipeline, anomaly detection) rather than one monolithic dashboard — each serves a different operational question.
+- 7-day retention on Prometheus (`--storage.tsdb.retention.time=7d`) is sufficient for development and keeps disk usage bounded.
+
+**Tradeoff:** Dashboard JSON files are verbose and difficult to edit by hand. The practical workflow is: edit dashboards in the Grafana UI, export the JSON, and commit it to `monitoring/provisioning/dashboards/`. The `uid: prometheus` must be explicitly set in the datasource provisioning to match the `datasource` references in dashboard JSON. Prometheus host port (9094) chosen to avoid confusion with Kafka's internal port 9092, though there is no actual collision.
+
+
+

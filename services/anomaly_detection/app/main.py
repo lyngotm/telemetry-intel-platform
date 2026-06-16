@@ -10,6 +10,7 @@ import signal
 import asyncpg
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from prometheus_client import start_http_server
 
 from services.anomaly_detection.app.config import settings
 from services.anomaly_detection.app.detector import process_event
@@ -31,6 +32,9 @@ async def run_service():
     Main entry point for the Anomaly Detection Service.
     Connects to Kafka, Redis, and PostgreSQL, then processes enriched events.
     """
+    start_http_server(settings.metrics_port)
+    logger.info("Prometheus metrics available on port 9091")
+
     # --- Setup resources ---
     db_pool = await asyncpg.create_pool(
         dsn=settings.database_url,

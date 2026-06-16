@@ -24,6 +24,7 @@ from services.api_gateway.app.dependencies import (
 )
 from services.api_gateway.app.rate_limiter import require_rate_limit
 from services.api_gateway.app.rbac import require_role
+from shared.metrics import KAFKA_PUBLISH_ERRORS
 from shared.models.models import (
     APIListResponse,
     APIResponse,
@@ -78,21 +79,23 @@ async def ingest_telemetry(
                 value=message_value,
                 key=str(event.device_id).encode("utf-8"),
             ),
-            timeout=5.0,
+            timeout=settings.kafka_publish_timeout_seconds,
         )
     except asyncio.TimeoutError:
         logger.error("Kafka publish timed out (broker may be unreachable)")
+        KAFKA_PUBLISH_ERRORS.labels(error_type="timeout").inc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Telemetry ingestion temporarily unavailable. Please retry.",
-            headers={"Retry-After": "5"},
+            headers={"Retry-After": str(int(settings.kafka_publish_timeout_seconds))},
         )
     except Exception as e:
         logger.error(f"Kafka publish failed: {e}")
+        KAFKA_PUBLISH_ERRORS.labels(error_type="kafka_error").inc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Telemetry ingestion temporarily unavailable. Please retry.",
-            headers={"Retry-After": "5"},
+            headers={"Retry-After": str(int(settings.kafka_publish_timeout_seconds))},
         )
     logger.info(
         f"Published event to {settings.kafka_topic_raw}: "

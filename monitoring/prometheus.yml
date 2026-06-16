@@ -1,0 +1,31 @@
+# ============================================================
+# Prometheus scrape configuration
+# ============================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # --- API Gateway (FastAPI /metrics endpoint on port 8000) ---
+  - job_name: "api-gateway"
+    static_configs:
+      - targets: ["api-gateway:8000"]
+        labels:
+          service: "api-gateway"
+
+  # --- Ingestion Consumer (prometheus_client side server on port 9090) ---
+  - job_name: "ingestion-consumer"
+    static_configs:
+      - targets: ["ingestion-consumer:9090"]
+        labels:
+          service: "ingestion-consumer"
+
+  # --- Anomaly Detection (prometheus_client side server on port 9091) ---
+  - job_name: "anomaly-detection"
+    static_configs:
+      - targets: ["anomaly-detection:9091"]
+        labels:
+          service: "anomaly-detection"
+
+          

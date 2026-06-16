@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tip-config
+  namespace: tip
+data:
+  # PostgreSQL
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "telemetry"
+  POSTGRES_USER: "telemetry_user"
+
+  # Kafka (internal cluster DNS name, port 9092)
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_TOPIC_RAW: "telemetry.raw"
+  KAFKA_TOPIC_ENRICHED: "telemetry.enriched"
+  KAFKA_TOPIC_DLQ: "telemetry.dlq"
+  KAFKA_TOPIC_ANOMALIES: "anomalies.detected"
+  KAFKA_CONSUMER_GROUP_INGESTION: "ingestion-consumer-group"
+  KAFKA_CONSUMER_GROUP_ANOMALY: "anomaly-detection-group"
+
+  # Redis
+  REDIS_URL: "redis://redis:6379/0"
+
+  # API
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+
+  # JWT
+  JWT_PRIVATE_KEY_PATH: "/app/keys/private.pem"
+  JWT_PUBLIC_KEY_PATH: "/app/keys/public.pem"
+  JWT_ALGORITHM: "RS256"
+  JWT_EXPIRY_MINUTES: "60"
+
+  # Rate Limiting
+  RATE_LIMIT_INGESTION: "1000"
+  RATE_LIMIT_QUERY: "100"
+
+  # Anomaly Detection
+  WINDOW_SIZE_SECONDS: "300"
+  MIN_WINDOW_SAMPLES: "10"
+  Z_SCORE_THRESHOLD_LOW: "2.5"
+  Z_SCORE_THRESHOLD_MEDIUM: "3"
+  Z_SCORE_THRESHOLD_HIGH: "3.5"
+  Z_SCORE_THRESHOLD_CRITICAL: "4"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+
+  
