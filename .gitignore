@@ -6,4 +6,6 @@ __pycache__/
 
 # pytest
 .pytest_cache/
+
 keys/
+k8s/jwt-keys-secret.yaml

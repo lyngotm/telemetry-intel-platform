@@ -4,15 +4,16 @@ and publishes enriched events to telemetry.enriched.
 """
 
 import asyncio
-import signal
 import logging
+import signal
 
 import asyncpg
+import redis.asyncio as aioredis
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from prometheus_client import start_http_server
 
 from services.ingestion_consumer.app.config import settings
 from services.ingestion_consumer.app.consumer import process_message
-import redis.asyncio as aioredis
 from services.ingestion_consumer.app.enrichment import DeviceEnrichment
 
 # Setup logging
@@ -33,6 +34,10 @@ async def run_consumer():
     Main entry point for the Ingestion Consumer.
     Connects to Kafka and PostgreSQL, then processes messages in a loop.
     """
+    
+    start_http_server(settings.metrics_port)
+    logger.info("Prometheus metrics available on port 9090")
+
     # --- Setup resources ---
     db_pool = await asyncpg.create_pool(
         dsn=settings.database_url,

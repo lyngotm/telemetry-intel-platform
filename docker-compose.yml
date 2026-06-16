@@ -92,9 +92,185 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+  
+  # ============================================================
+  # OBSERVABILITY STACK
+  # ============================================================
+
+  # --- Prometheus ---
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: tip-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9094:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- Grafana ---
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: tip-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+  # ============================================================
+  # APPLICATION SERVICES
+  # ============================================================
+
+  # --- API Gateway ---
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api_gateway/Dockerfile
+    container_name: tip-api-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_pass}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_RAW: telemetry.raw
+      KAFKA_TOPIC_ENRICHED: telemetry.enriched
+      KAFKA_TOPIC_DLQ: telemetry.dlq
+      REDIS_URL: redis://redis:6379/0
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      JWT_PRIVATE_KEY_PATH: /app/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /app/keys/public.pem
+      JWT_ALGORITHM: RS256
+      JWT_EXPIRY_MINUTES: 60
+      RATE_LIMIT_INGESTION: 1000
+      RATE_LIMIT_QUERY: 100
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+
+  # --- Ingestion Consumer ---
+  ingestion-consumer:
+    build:
+      context: .
+      dockerfile: services/ingestion_consumer/Dockerfile
+    container_name: tip-ingestion-consumer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_pass}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_RAW: telemetry.raw
+      KAFKA_TOPIC_ENRICHED: telemetry.enriched
+      KAFKA_TOPIC_DLQ: telemetry.dlq
+      KAFKA_CONSUMER_GROUP: ingestion-consumer-group
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: INFO
+    restart: on-failure
+
+  # --- Anomaly Detection Service ---
+  anomaly-detection:
+    build:
+      context: .
+      dockerfile: services/anomaly_detection/Dockerfile
+    container_name: tip-anomaly-detection
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_pass}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_ENRICHED: telemetry.enriched
+      KAFKA_TOPIC_ANOMALIES: anomalies.detected
+      KAFKA_CONSUMER_GROUP: anomaly-detection-group
+      REDIS_URL: redis://redis:6379/0
+      WINDOW_SIZE_SECONDS: 300
+      MIN_WINDOW_SAMPLES: 10
+      Z_SCORE_THRESHOLD_LOW: 2.5
+      Z_SCORE_THRESHOLD_MEDIUM: 3
+      Z_SCORE_THRESHOLD_HIGH: 3.5
+      Z_SCORE_THRESHOLD_CRITICAL: 4
+      LOG_LEVEL: INFO
+    restart: on-failure
+
+  # --- Telemetry Simulator ---
+  simulator:
+    build:
+      context: .
+      dockerfile: services/simulator/Dockerfile
+    container_name: tip-simulator
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    environment:
+      API_URL: http://api-gateway:8000
+      LOG_LEVEL: INFO
+    restart: on-failure
+    profiles:
+      - simulator
 
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
 
   

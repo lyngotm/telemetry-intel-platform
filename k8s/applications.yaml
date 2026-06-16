@@ -1,0 +1,185 @@
+# ============================================================
+# API Gateway
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: telemetry-intel-platform-api-gateway:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: tip-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tip-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: jwt-keys
+              mountPath: /app/keys
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: jwt-keys
+          secret:
+            secretName: jwt-keys
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: tip
+spec:
+  type: NodePort
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30080
+
+# ============================================================
+# Ingestion Consumer
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion-consumer
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingestion-consumer
+  template:
+    metadata:
+      labels:
+        app: ingestion-consumer
+    spec:
+      containers:
+        - name: ingestion-consumer
+          image: telemetry-intel-platform-ingestion-consumer:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: tip-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tip-secrets
+                  key: POSTGRES_PASSWORD
+            - name: KAFKA_CONSUMER_GROUP
+              value: "ingestion-consumer-group"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestion-consumer
+  namespace: tip
+spec:
+  selector:
+    app: ingestion-consumer
+  ports:
+    - port: 9090
+      targetPort: 9090
+
+# ============================================================
+# Anomaly Detection
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-detection
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anomaly-detection
+  template:
+    metadata:
+      labels:
+        app: anomaly-detection
+    spec:
+      containers:
+        - name: anomaly-detection
+          image: telemetry-intel-platform-anomaly-detection:latest
+          imagePullPolicy: Never
+          envFrom:
+            - configMapRef:
+                name: tip-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tip-secrets
+                  key: POSTGRES_PASSWORD
+            - name: KAFKA_CONSUMER_GROUP
+              value: "anomaly-detection-group"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anomaly-detection
+  namespace: tip
+spec:
+  selector:
+    app: anomaly-detection
+  ports:
+    - port: 9091
+      targetPort: 9091
+
+
+              

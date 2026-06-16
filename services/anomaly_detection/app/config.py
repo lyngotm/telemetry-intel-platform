@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Prometheus
+    metrics_port: int = 9091
+
     log_level: str = "INFO"
 
         # Anomaly detection parameters

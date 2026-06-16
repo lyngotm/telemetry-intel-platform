@@ -1,5 +1,5 @@
 # Simulator configuration
-api_url: "http://localhost:8000"
+api_url: "http://localhost:30080"
 
 # Authentication
 auth_username: "operator"

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     kafka_topic_raw: str = "telemetry.raw"
     kafka_topic_enriched: str = "telemetry.enriched"
     kafka_topic_dlq: str = "telemetry.dlq"
+    kafka_publish_timeout_seconds: float = 5.0
 
     # API
     api_host: str = "0.0.0.0"

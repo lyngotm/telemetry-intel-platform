@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-init
+  namespace: tip
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: kafka-init
+          image: confluentinc/cp-kafka:7.6.0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for Kafka to be ready..."
+              cub kafka-ready -b kafka:9092 1 60
+
+              echo "Creating topics..."
+              kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.raw --partitions 3 --replication-factor 1
+              kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.enriched --partitions 3 --replication-factor 1
+              kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic telemetry.dlq --partitions 1 --replication-factor 1
+              kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --topic anomalies.detected --partitions 3 --replication-factor 1
+
+              echo "Topics created:"
+              kafka-topics --list --bootstrap-server kafka:9092
+              echo "Done."
+              

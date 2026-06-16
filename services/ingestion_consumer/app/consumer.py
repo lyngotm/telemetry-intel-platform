@@ -17,8 +17,9 @@ from aiokafka import AIOKafkaProducer
 from pydantic import ValidationError
 
 from services.ingestion_consumer.app.config import settings
-from shared.models.models import TelemetryRawMessage, TelemetryEnrichedMessage
 from services.ingestion_consumer.app.enrichment import DeviceEnrichment
+from shared.metrics import EVENTS_DLQ, EVENTS_INGESTED
+from shared.models.models import TelemetryEnrichedMessage, TelemetryRawMessage
 
 logger = logging.getLogger("ingestion_consumer")
 
@@ -46,6 +47,7 @@ async def process_message(
             original_payload=raw_value,
             error_reason=f"Schema validation failed: {str(e)}",
         )
+        EVENTS_DLQ.labels(reason="validation_failed").inc()
         return
 
     # --- Step 2: Enrich with device metadata ---
@@ -58,6 +60,7 @@ async def process_message(
             original_payload=raw_value,
             error_reason=f"Device {event.device_id} not found during enrichment",
         )
+        EVENTS_DLQ.labels(reason="device_not_found").inc()
         return
 
     # --- Step 3: Write to PostgreSQL ---
@@ -84,6 +87,7 @@ async def process_message(
             original_payload=raw_value,
             error_reason=f"Foreign key violation: device {event.device_id} not registered",
         )
+        EVENTS_DLQ.labels(reason="fk_violation").inc()
         return
     except Exception as e:
         # Unexpected DB error — log and send to DLQ rather than crashing
@@ -93,6 +97,7 @@ async def process_message(
             original_payload=raw_value,
             error_reason=f"Database error: {str(e)}",
         )
+        EVENTS_DLQ.labels(reason="db_error").inc()
         return
 
     # --- Step 4: Publish to telemetry.enriched ---
@@ -113,6 +118,7 @@ async def process_message(
         value=enriched_event.model_dump_json(),
         key=str(event.device_id).encode("utf-8"),
     )
+    EVENTS_INGESTED.inc()
 
     logger.info(
         f"Processed event: id={event_id}, device={event.device_id}, "

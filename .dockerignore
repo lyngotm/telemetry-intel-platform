@@ -1,0 +1,39 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+
+# Environment and secrets
+.env
+.env.example
+keys/
+
+# IDE
+.vscode
+.idea
+
+# Tests (not needed in production images)
+tests/
+**/tests/
+
+# Documentation
+docs/
+README.md
+
+# Local development
+db/
+docker-compose.yml
+
+# Terraform and K8s (separate deployment concerns)
+terraform/
+k8s/
+monitoring/

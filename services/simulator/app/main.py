@@ -6,8 +6,9 @@ Supports configurable anomaly injection for testing the detection pipeline.
 """
 
 import asyncio
-import signal
 import logging
+import os
+import signal
 import sys
 import time
 from datetime import datetime, timezone
@@ -39,9 +40,11 @@ async def obtain_token(client: httpx.AsyncClient, config: dict) -> str:
     Uses operator credentials since the simulator needs to POST telemetry.
     """
     auth_url = "/api/v1/auth/token"
+    auth_username = os.environ.get("AUTH_USERNAME", config.get("auth_username", "operator"))
+    auth_password = os.environ.get("AUTH_PASSWORD", config.get("auth_password", "operator123"))
     credentials = {
-        "username": config.get("auth_username", "operator"),
-        "password": config.get("auth_password", "operator123"),
+        "username": auth_username,
+        "password": auth_password,
     }
 
     response = await client.post(auth_url, json=credentials)
@@ -118,7 +121,8 @@ def generate_reading(
 async def run_simulator():
     """Main simulator loop."""
     config = load_config()
-    api_url = config["api_url"]
+    api_url = os.environ.get("API_URL", config["api_url"])
+
     send_interval = config["send_interval"]
     metrics_config = config["metrics"]
     anomaly_config = config["anomaly"]
