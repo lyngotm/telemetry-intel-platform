@@ -154,8 +154,8 @@ spec:
               mountPath: /etc/grafana/provisioning/datasources
             - name: dashboard-provisioning
               mountPath: /etc/grafana/provisioning/dashboards
-            # - name: dashboard-json-files
-            #   mountPath: /var/lib/grafana/dashboards
+            - name: dashboard-json-files
+              mountPath: /var/lib/grafana/dashboards
       volumes:
         - name: datasources
           configMap:
@@ -163,6 +163,9 @@ spec:
         - name: dashboard-provisioning
           configMap:
             name: grafana-dashboard-provisioning
+        - name: dashboard-json-files
+          configMap:
+            name: grafana-dashboards
 ---
 apiVersion: v1
 kind: Service

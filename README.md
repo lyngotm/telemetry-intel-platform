@@ -195,6 +195,108 @@ PYTHONPATH=. uv run pytest -v -m "manual"
 # docker start tip-redis tip-kafka
 ```
 
+## Kubernetes Deployment (kind)
+
+Deploy the full stack to a local Kubernetes cluster using [kind](https://kind.sigs.k8s.io/).
+
+### Prerequisites
+
+- Docker
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+
+### Create Cluster
+
+```bash
+kind create cluster --name tip --config k8s/kind-config.yaml
+```
+
+### Build and Load Images
+
+```bash
+# Build application images
+docker compose build
+
+# Load into kind cluster
+kind load docker-image telemetry-intel-platform-api-gateway:latest --name tip
+kind load docker-image telemetry-intel-platform-ingestion-consumer:latest --name tip
+kind load docker-image telemetry-intel-platform-anomaly-detection:latest --name tip
+```
+
+### Deploy (in dependency order)
+
+```bash
+# 1. Namespace + configuration
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secret.yaml
+
+# 2. JWT keys secret (not committed — generate your own keys first)
+kubectl create secret generic jwt-keys \
+  --from-file=private.pem=keys/private.pem \
+  --from-file=public.pem=keys/public.pem \
+  --namespace=tip
+
+# 3. PostgreSQL init script
+kubectl apply -f k8s/postgres-init-configmap.yaml
+
+# 4. Infrastructure (postgres, redis, zookeeper, kafka)
+kubectl apply -f k8s/infrastructure.yaml
+kubectl wait --for=condition=Ready pods --all -n tip --timeout=120s
+
+# 5. Create Kafka topics (must wait for Kafka to be healthy)
+kubectl apply -f k8s/kafka-init.yaml
+kubectl wait --for=condition=Complete job/kafka-init -n tip --timeout=60s
+
+# 6. Application services (depend on topics existing)
+kubectl apply -f k8s/applications.yaml
+kubectl wait --for=condition=Ready pods -l app=api-gateway -n tip --timeout=60s
+
+# 7. Monitoring (Prometheus + Grafana)
+kubectl apply -f k8s/grafana-dashboards-configmap.yaml
+kubectl apply -f k8s/monitoring.yaml
+```
+
+### Verify
+
+```bash
+# All pods running
+kubectl get pods -n tip
+
+# API Gateway health check
+curl http://localhost:30080/health
+
+# Prometheus targets (all UP)
+# Open: http://localhost:30094/targets
+
+# Grafana dashboards (admin/admin)
+# Open: http://localhost:30030
+
+# Run simulator against K8s cluster
+PYTHONPATH=. API_GATEWAY_URL=http://localhost:30080 uv run python -m services.simulator.app.main
+```
+
+### Exposed Ports
+
+| Service | URL | NodePort |
+|---------|-----|----------|
+| API Gateway | http://localhost:30080 | 30080 |
+| Grafana | http://localhost:30030 | 30030 |
+| Prometheus | http://localhost:30094 | 30094 |
+
+### HPA (Horizontal Pod Autoscaler)
+
+The API Gateway scales on CPU utilization (target 70%):
+```bash
+kubectl get hpa -n tip
+```
+
+### Tear Down
+
+```bash
+kind delete cluster --name tip
+```
+
 ## Project Structure
 
 ```
