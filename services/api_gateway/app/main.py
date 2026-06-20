@@ -42,6 +42,8 @@ async def lifespan(app: FastAPI):
 
     app.state.redis_client = aioredis.from_url(
         settings.redis_url,
+        socket_connect_timeout=5,
+        socket_timeout=5,
         decode_responses=True,
     )
 

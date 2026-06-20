@@ -160,4 +160,38 @@ Documenting key design decisions and their rationale as the project evolves.
 **Tradeoff:** Dashboard JSON files are verbose and difficult to edit by hand. The practical workflow is: edit dashboards in the Grafana UI, export the JSON, and commit it to `monitoring/provisioning/dashboards/`. The `uid: prometheus` must be explicitly set in the datasource provisioning to match the `datasource` references in dashboard JSON. Prometheus host port (9094) chosen to avoid confusion with Kafka's internal port 9092, though there is no actual collision.
 
 
+## 009: Liveness vs. Readiness Probes — What Each Checks and Why They Differ
+
+**Date:** 2026-06-15
+**Status:** Accepted
+
+**Context:** Kubernetes uses probes to determine pod health. Two types serve different purposes: liveness (is the process alive?) and readiness (can it serve traffic?). The system design specifies both for all services.
+
+**Decision:** Implement two distinct health endpoints:
+- `GET /health` (liveness) — returns 200 if the process is running and can handle HTTP. Does NOT check downstream dependencies. If this fails, Kubernetes kills and restarts the pod.
+- `GET /ready` (readiness) — returns 200 only if downstream dependencies (Kafka, Redis, PostgreSQL) are reachable. If this fails, Kubernetes stops sending traffic to the pod but does NOT restart it.
+
+**Rationale:**
+- Liveness must be cheap and dependency-free. If liveness checked Redis and Redis went down, Kubernetes would restart all API pods — making the outage worse (cascading failure). The process itself is fine; it just can't serve cached responses.
+- Readiness is appropriate for dependency checks because the consequence is traffic routing, not pod termination. A pod that can't reach Kafka shouldn't receive POST telemetry requests, but it doesn't need to be killed — Kafka may recover momentarily.
+
+**Tradeoff:** A pod could be "live" but not "ready" indefinitely if a dependency is permanently down. Operators must monitor readiness state and intervene. The HPA won't scale up unready pods, preventing resource waste.
+
+
+## 010: kind for Development, Terraform for Production — Cost Strategy
+
+**Date:** 2026-06-16
+**Status:** Accepted
+
+**Context:** The project needs both a local development environment (for daily iteration) and a production infrastructure definition. Running cloud infrastructure continuously is expensive (~$360/month for the defined stack).
+
+**Decision:** Use `kind` (Kubernetes IN Docker) for local development and testing. Use Terraform to define production AWS infrastructure (VPC, EKS, RDS, ElastiCache, MSK, ECR, IAM) as code, validated via `terraform plan` without actually deploying. The same Kubernetes manifests work in both environments — only the infrastructure layer differs.
+
+**Rationale:**
+- `kind` runs a full Kubernetes cluster inside Docker containers at zero cost. The K8s manifests (Deployments, Services, ConfigMaps, etc.) are identical to production — the only difference is how images are loaded and how services are exposed (NodePort vs. LoadBalancer).
+- Terraform validates configuration syntax and resource dependencies via `terraform plan` without creating resources (no AWS charges). The plan output demonstrates infrastructure knowledge without incurring cost.
+
+**Tradeoff:** kind has no persistent storage by default — Kafka loses topics on pod restart (requires re-running the kafka-init Job). In production, AWS MSK provides durable storage natively. Local development requires a specific deployment order (infrastructure → kafka-init → applications) that wouldn't be needed with managed services.
+
+
 

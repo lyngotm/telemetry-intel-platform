@@ -9,3 +9,7 @@ __pycache__/
 
 keys/
 k8s/jwt-keys-secret.yaml
+
+terraform.tfvars
+terraform/.terraform/
+terraform/*.tfstate*
