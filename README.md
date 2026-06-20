@@ -110,6 +110,18 @@ flowchart LR
 - Resilience: cache-aside fails gracefully when Redis is down, 503 on Kafka failure
 - Simulator authenticates as operator before sending telemetry
 
+**Week 4 ✅ — Containerization, Orchestration & Observability**
+- Prometheus instrumentation on all services (`/metrics` endpoints)
+- Health (`/health`) and readiness (`/ready`) probes
+- Prometheus scraping all three services (15s interval)
+- Grafana with three auto-provisioned dashboards (System Overview, Ingestion Pipeline, Anomaly Detection)
+- Multi-stage Dockerfiles for all services (python:3.11-slim + uv, ~76MB each)
+- docker-compose.yml runs full stack (apps + Prometheus + Grafana) with one command
+- Kubernetes deployment via kind (namespace, ConfigMaps, Secrets, Deployments, Services)
+- HPA for API Gateway (CPU target 70%, 1–5 replicas)
+- Terraform defining production AWS infrastructure (VPC, EKS, RDS, ElastiCache, MSK, ECR, IAM)
+
+
 ## Quick Start
 
 ### Prerequisites
@@ -132,20 +144,11 @@ mkdir -p keys
 openssl genrsa -out keys/private.pem 2048
 openssl rsa -in keys/private.pem -pubout -out keys/public.pem
 
-# Start infrastructure (PostgreSQL + Kafka + Redis)
+# Start the entire stack (infrastructure + all services)
 docker compose up -d
 
-# Start the API Gateway (terminal 1)
-PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --port 8000
-
-# Start the Ingestion Consumer (terminal 2)
-PYTHONPATH=. uv run python -m services.ingestion_consumer.app.main
-
-# Start the Anomaly Detection Service (terminal 3)
-PYTHONPATH=. uv run python -m services.anomaly_detection.app.main
-
-# Run the simulator (terminal 4)
-PYTHONPATH=. uv run python -m services.simulator.app.main
+# Verify all containers are healthy
+docker compose ps
 ```
 
 ### Verify
@@ -175,6 +178,24 @@ curl -X POST -H "Authorization: Bearer $VIEWER_TOKEN" http://localhost:8000/api/
 
 # View API documentation (open in browser)
 # Navigate to: http://localhost:8000/docs
+```
+
+### Local Development (with hot-reload)
+
+For active development, run infrastructure in Docker but services locally for instant code reloading:
+
+```bash
+# Install dependencies
+uv sync --dev
+
+# Start infrastructure only (PostgreSQL + Kafka + Redis)
+docker compose up -d postgres zookeeper kafka kafka-init redis
+
+# Start services individually (each in its own terminal)
+PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --port 8000
+PYTHONPATH=. uv run python -m services.ingestion_consumer.app.main
+PYTHONPATH=. uv run python -m services.anomaly_detection.app.main
+PYTHONPATH=. uv run python -m services.simulator.app.main
 ```
 
 ### Run Tests

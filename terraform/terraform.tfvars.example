@@ -1,0 +1,26 @@
+# terraform/terraform.tfvars.example
+# ============================================================
+# Copy to terraform.tfvars and fill in values.
+# terraform.tfvars is gitignored (contains secrets).
+# ============================================================
+
+aws_region   = "us-west-2"
+project_name = "tip"
+environment  = "dev"
+
+# EKS
+eks_node_instance_type = "t3.medium"
+eks_node_desired_count = 2
+
+# RDS
+rds_instance_class = "db.t3.medium"
+rds_password       = "CHANGE_ME_use_a_strong_password"
+
+# Redis
+redis_node_type = "cache.t3.micro"
+
+# MSK
+msk_instance_type          = "kafka.t3.small"
+msk_number_of_broker_nodes = 2
+msk_ebs_volume_size        = 50
+
