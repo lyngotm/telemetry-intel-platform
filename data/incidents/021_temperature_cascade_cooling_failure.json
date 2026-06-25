@@ -1,0 +1,30 @@
+{
+  "title": "Cascading temperature rise across data center floor due to chiller failure",
+  "description": "Temperature sensors across an entire data center floor (40+ sensors) reported progressive temperature increases over a 20-minute period. The pattern started from sensors nearest the CRAC units and propagated outward. Temperatures rose from 22\u00b0C baseline to 35-42\u00b0C depending on proximity to high-density racks. Humidity sensors simultaneously reported dropping values as relative humidity decreased with rising temperature.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "humidity_sensor",
+    "rack_monitor"
+  ],
+  "root_cause": "The primary chiller plant experienced a refrigerant compressor failure, eliminating cold water supply to all CRAC units on the affected floor. CRAC units continued running fans (circulating air) but without cooling capacity. The propagation pattern from CRAC units outward reflects the loss of cold air supply at those points. The secondary chiller took 18 minutes to start and reach capacity due to a control system sequencing delay.",
+  "resolution_steps": [
+    "Initiate emergency cooling protocol: open exterior doors/windows if weather permits, deploy portable cooling units",
+    "Reduce heat load by identifying and shutting down non-critical equipment",
+    "Diagnose chiller failure: check compressor, refrigerant levels, electrical supply",
+    "Verify secondary chiller auto-start sequence is configured with acceptable delay",
+    "Reduce secondary chiller start delay from 18 minutes to under 5 minutes",
+    "Monitor all equipment temperatures during recovery to identify any thermal damage",
+    "Conduct post-incident review of cooling redundancy adequacy"
+  ],
+  "severity": "critical",
+  "failure_category": "cooling_system_failure",
+  "tags": [
+    "temperature",
+    "humidity",
+    "cooling",
+    "cascade",
+    "multi_device",
+    "data_center",
+    "critical_infrastructure"
+  ]
+}

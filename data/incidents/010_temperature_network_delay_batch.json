@@ -1,0 +1,27 @@
+{
+  "title": "Apparent temperature spike caused by network buffering and batch delivery",
+  "description": "A temperature sensor reported 15 identical readings simultaneously, all showing values 10\u00b0C above the previous stable reading. The batch arrived with identical timestamps despite the device normally reporting every 30 seconds. Other sensors in the same zone showed no change.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "wireless_sensor"
+  ],
+  "root_cause": "The wireless sensor experienced network connectivity loss for approximately 7 minutes. The device firmware buffers readings locally when connectivity is lost. Upon reconnection, all buffered readings were transmitted simultaneously with their original timestamps. The apparently anomalous readings were actually legitimate measurements taken during a brief localized heat event (nearby equipment startup) that resolved before connectivity returned.",
+  "resolution_steps": [
+    "Check device connectivity logs for gaps corresponding to the batch timestamp window",
+    "Verify that the batch count multiplied by the reporting interval matches the connectivity gap duration",
+    "Review actual reading values in context of their original timestamps rather than delivery time",
+    "If readings represent a real event, investigate the localized heat source active during that period",
+    "Configure anomaly detection to account for batch-delivered readings (detect and flag network recovery patterns)",
+    "Consider implementing delivery-time vs measurement-time distinction in the ingestion pipeline"
+  ],
+  "severity": "low",
+  "failure_category": "network_connectivity",
+  "tags": [
+    "temperature",
+    "network",
+    "buffering",
+    "batch_delivery",
+    "false_positive",
+    "wireless"
+  ]
+}

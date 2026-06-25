@@ -1,0 +1,17 @@
+{
+  "title": "Sustained CPU usage increase caused by firmware memory leak",
+  "description": "A cluster of IoT gateway devices running firmware v2.3.1 exhibited steadily increasing CPU usage over a 72-hour period. CPU readings started at the normal baseline of 15-25% and climbed to 85-95% before triggering alerts. The increase was linear and consistent across all devices running the same firmware version, while devices on v2.3.0 remained stable.",
+  "affected_device_types": ["temperature_sensor", "edge_gateway", "iot_controller"],
+  "root_cause": "Firmware version 2.3.1 introduced a memory leak in the telemetry buffering module. The buffer allocation routine fails to free memory when the upstream connection is temporarily interrupted. Over time, the growing memory footprint forces increased garbage collection cycles, consuming CPU. The leak rate is approximately 2MB per hour per device under normal telemetry reporting intervals.",
+  "resolution_steps": [
+    "Identify all devices running firmware v2.3.1 via device registry query",
+    "Schedule rolling restart of affected devices to temporarily free leaked memory",
+    "Roll back affected devices to firmware v2.3.0 if restart cadence becomes unsustainable",
+    "Apply firmware patch v2.3.2 once available (fixes buffer deallocation in telemetry module)",
+    "Set up proactive alert for CPU usage trending upward by more than 5% per day sustained over 48 hours",
+    "Document firmware version correlation in incident report for future regression detection"
+  ],
+  "severity": "high",
+  "failure_category": "firmware_bug",
+  "tags": ["cpu_usage", "memory_leak", "firmware", "gradual_drift", "version_specific", "multi_device"]
+}

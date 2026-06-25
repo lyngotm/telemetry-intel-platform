@@ -1,0 +1,28 @@
+{
+  "title": "CPU exhaustion from denial-of-service request flood targeting management API",
+  "description": "Three edge gateway devices simultaneously reported CPU usage exceeding 95% with corresponding increases in network interface utilization. The CPU spike was sustained and did not follow any scheduled activity pattern. Network logs showed an unusually high rate of incoming connections on the device management port from a single source IP.",
+  "affected_device_types": [
+    "edge_gateway",
+    "iot_controller"
+  ],
+  "root_cause": "A misconfigured network scanner in the IT department was running an aggressive vulnerability scan against the IoT device subnet. The scan sent thousands of connection attempts per second to each device's management port, overwhelming the limited CPU resources of the embedded devices. The scanner was configured for enterprise server scanning rates inappropriate for resource-constrained IoT devices.",
+  "resolution_steps": [
+    "Identify the source IP generating excessive traffic from network logs",
+    "Contact the source owner to halt the scan immediately",
+    "Implement rate limiting on device management interfaces (max 10 connections/second)",
+    "Add the IoT subnet to the vulnerability scanner's exclusion list or reduce scan intensity",
+    "Configure network-level rate limiting on the switch/firewall for the IoT VLAN",
+    "Implement connection timeout limits on device management interfaces",
+    "Schedule any required vulnerability scans during maintenance windows with reduced intensity settings"
+  ],
+  "severity": "high",
+  "failure_category": "network_overload",
+  "tags": [
+    "cpu_usage",
+    "network",
+    "dos",
+    "vulnerability_scan",
+    "multi_device",
+    "simultaneous"
+  ]
+}

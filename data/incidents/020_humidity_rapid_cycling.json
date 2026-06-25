@@ -1,0 +1,26 @@
+{
+  "title": "Humidity sensor rapid cycling between two values indicating ADC failure",
+  "description": "A humidity sensor alternates between exactly 32.0% and 64.0% RH on every consecutive reading (every 30 seconds). The values do not vary and the pattern has persisted for 6 hours. Temperature and other co-located sensors report stable, normal values.",
+  "affected_device_types": [
+    "humidity_sensor",
+    "environmental_monitor"
+  ],
+  "root_cause": "The sensor's analog-to-digital converter (ADC) has a stuck bit (bit 7) that alternates between 0 and 1 on consecutive conversions. This creates two fixed output values that are exactly one binary power apart (32% = 0100000, 64% = 1000000 in the 7-bit humidity range). This is a known failure mode of successive-approximation ADCs when a comparator input develops a marginal connection.",
+  "resolution_steps": [
+    "Confirm the binary pattern by converting reported values to raw ADC counts",
+    "Power cycle the sensor to determine if the stuck bit clears (sometimes a temporary latch-up)",
+    "If power cycling resolves, monitor for recurrence (indicates marginal solder joint)",
+    "If persistent after power cycle, replace the sensor unit",
+    "Log the failure mode for future pattern recognition (two alternating fixed values = ADC bit fault)",
+    "Consider implementing a reading validation rule that flags constant alternating-value patterns"
+  ],
+  "severity": "medium",
+  "failure_category": "hardware_failure",
+  "tags": [
+    "humidity",
+    "adc_failure",
+    "stuck_bit",
+    "alternating_values",
+    "hardware"
+  ]
+}

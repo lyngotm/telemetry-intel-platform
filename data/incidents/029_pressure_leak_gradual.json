@@ -1,0 +1,28 @@
+{
+  "title": "Gradual pressure decrease indicating developing pneumatic system leak",
+  "description": "A pressure sensor monitoring a sealed pneumatic system shows a slow, steady decrease of approximately 0.5% per hour over the past 72 hours. The rate of decrease is constant and does not vary with time of day or environmental conditions. The system was last serviced and certified leak-free 6 months ago.",
+  "affected_device_types": [
+    "pressure_sensor",
+    "industrial_monitor"
+  ],
+  "root_cause": "A developing leak in the pneumatic system at a fitting joint. The constant rate of pressure loss regardless of environmental conditions indicates a mechanical leak (as opposed to thermal contraction which would vary with temperature). The small leak rate (0.5% per hour) is consistent with a fitting that has loosened over time due to vibration \u2014 not yet a catastrophic failure but requiring attention before it worsens.",
+  "resolution_steps": [
+    "Calculate total pressure loss to determine current system state versus minimum operating pressure",
+    "Perform ultrasonic leak detection survey on all fittings while system is pressurized",
+    "Apply soap bubble testing to suspected leak points for visual confirmation",
+    "Tighten or replace the leaking fitting with appropriate thread sealant",
+    "Re-pressurize system and verify leak rate drops to zero (hold test for 24 hours)",
+    "Implement trending alert: notify maintenance when pressure drops more than 2% from last fill within 48 hours",
+    "Schedule regular fitting torque checks as part of preventive maintenance"
+  ],
+  "severity": "high",
+  "failure_category": "mechanical_degradation",
+  "tags": [
+    "pressure",
+    "leak",
+    "gradual",
+    "trending",
+    "maintenance_required",
+    "pneumatic"
+  ]
+}

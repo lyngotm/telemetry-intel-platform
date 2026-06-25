@@ -5,6 +5,7 @@ API Gateway — main application entry point.
 from contextlib import asynccontextmanager
 
 import asyncpg
+import chromadb
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 from fastapi import FastAPI
@@ -13,6 +14,7 @@ from services.api_gateway.app.config import settings
 from services.api_gateway.app.routers.anomalies import router as anomalies_router
 from services.api_gateway.app.routers.auth import router as auth_router
 from services.api_gateway.app.routers.devices import router as devices_router
+from services.api_gateway.app.routers.knowledge import router as knowledge_router
 from services.api_gateway.app.routers.telemetry import router as telemetry_router
 from shared.logging_config import setup_logging
 from shared.metrics import PrometheusMiddleware, metrics_response
@@ -47,8 +49,20 @@ async def lifespan(app: FastAPI):
         decode_responses=True,
     )
 
-    logger.info(f"API Gateway started. Kafka: {settings.kafka_bootstrap_servers}, Redis: {settings.redis_url}")
+    app.state.chroma_client = chromadb.HttpClient(
+        host=settings.chroma_host,
+        port=settings.chroma_port,
+    )
+    
+    app.state.chroma_client.get_or_create_collection(
+        name="incident_embeddings",
+        metadata={"hnsw:space": "cosine"},
+    )
 
+    logger.info(
+        f"API Gateway started. Kafka: {settings.kafka_bootstrap_servers}, "
+        f"Redis: {settings.redis_url}, ChromaDB: {settings.chroma_host}:{settings.chroma_port}"
+    )
     yield
 
     # --- Shutdown ---
@@ -71,6 +85,7 @@ app.include_router(auth_router)
 app.include_router(devices_router)
 app.include_router(telemetry_router)
 app.include_router(anomalies_router)
+app.include_router(knowledge_router)
 
 
 @app.get("/health")

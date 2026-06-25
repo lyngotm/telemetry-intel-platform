@@ -1,0 +1,26 @@
+{
+  "title": "Ambient temperature rise during regional heatwave affecting outdoor sensors",
+  "description": "Outdoor-mounted temperature sensors across the facility perimeter reported readings 15-20\u00b0C above normal seasonal baselines over a 5-day period. Indoor sensors remained stable. Weather service data confirmed an extreme heat event in the region with ambient temperatures exceeding 45\u00b0C.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "outdoor_monitor"
+  ],
+  "root_cause": "Legitimate environmental condition \u2014 regional heatwave caused actual ambient temperature increase. Sensors were reporting accurately. The anomaly detection system correctly identified the deviation from baseline but the root cause was external weather rather than equipment failure.",
+  "resolution_steps": [
+    "Cross-reference with local weather station data to confirm environmental cause",
+    "Verify sensor accuracy by comparing multiple co-located sensors",
+    "Temporarily adjust alert thresholds for outdoor sensors during extreme weather events",
+    "Confirm no equipment damage occurred due to sustained high temperatures",
+    "Review thermal protection ratings of outdoor equipment",
+    "Consider implementing weather-aware dynamic thresholds for outdoor sensors"
+  ],
+  "severity": "low",
+  "failure_category": "environmental",
+  "tags": [
+    "temperature",
+    "weather",
+    "external_cause",
+    "false_positive",
+    "seasonal"
+  ]
+}

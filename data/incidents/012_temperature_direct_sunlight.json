@@ -1,0 +1,26 @@
+{
+  "title": "Temperature sensor reading elevated due to direct solar radiation exposure",
+  "description": "An outdoor temperature sensor consistently reports readings 8-12\u00b0C above the regional weather station baseline during afternoon hours (1pm-5pm). Morning and evening readings align with expected values. The pattern repeats daily with consistent timing. The sensor was recently relocated as part of a facility expansion.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "outdoor_monitor"
+  ],
+  "root_cause": "The sensor was relocated to a position that receives direct afternoon sunlight. The sensor housing absorbs solar radiation, heating the sensing element above actual ambient temperature. This is a well-known measurement error called 'solar loading' that affects improperly shielded temperature sensors. The time pattern corresponds to the sun's position relative to the sensor mounting location.",
+  "resolution_steps": [
+    "Verify the daily pattern correlates with solar position (worst during clear-sky afternoons)",
+    "Install a solar radiation shield (Stevenson screen or aspirated shield) over the sensor",
+    "If immediate shielding is unavailable, relocate sensor to a north-facing shaded position",
+    "Apply a correction factor to readings during affected hours as a temporary measure",
+    "Update installation guidelines to require solar shielding assessment for all outdoor sensor placements",
+    "Validate correction by comparing shielded readings against a reference sensor"
+  ],
+  "severity": "low",
+  "failure_category": "installation_error",
+  "tags": [
+    "temperature",
+    "solar_loading",
+    "installation",
+    "time_pattern",
+    "outdoor"
+  ]
+}

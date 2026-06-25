@@ -1,0 +1,17 @@
+{
+  "title": "Pressure sensor calibration drift after power supply fluctuation",
+  "description": "Three pressure sensors in the cleanroom monitoring system reported readings 15-20% below expected values. The deviation appeared suddenly following a brief power fluctuation event (UPS switchover lasting 200ms). Sensors did not return to normal after power stabilized. Other sensor types on the same power circuit were unaffected.",
+  "affected_device_types": ["pressure_sensor", "cleanroom_monitor"],
+  "root_cause": "The pressure sensors use a piezoelectric transducer that requires a stable reference voltage for accurate measurements. The 200ms power interruption during UPS switchover caused the internal reference capacitor to partially discharge. When power returned, the reference voltage settled at a lower-than-specified level, introducing a systematic negative offset to all readings. This is a known sensitivity in sensors using the MPX5700 series transducer.",
+  "resolution_steps": [
+    "Compare affected sensor readings against a portable calibrated reference gauge",
+    "Power cycle affected sensors with a minimum 30-second off period to fully discharge and reset the reference capacitor",
+    "Verify readings return to expected range after power cycle",
+    "If readings remain offset, perform factory recalibration procedure via serial interface",
+    "Install power conditioning filters on the sensor supply rail to suppress transients below 500ms",
+    "Add UPS transfer time monitoring to correlate future pressure anomalies with power events"
+  ],
+  "severity": "medium",
+  "failure_category": "sensor_calibration",
+  "tags": ["pressure", "calibration", "power_event", "offset_error", "hardware"]
+}

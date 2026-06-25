@@ -1,0 +1,27 @@
+{
+  "title": "CPU spike during telemetry backlog processing after network restoration",
+  "description": "An edge gateway device reported CPU usage of 90-95% sustained for 12 minutes following a 2-hour network outage. The device buffered telemetry locally during the outage and attempted to transmit all buffered data simultaneously upon reconnection. Normal baseline CPU is 15-20%.",
+  "affected_device_types": [
+    "edge_gateway",
+    "iot_controller"
+  ],
+  "root_cause": "The device firmware's store-and-forward mechanism accumulated approximately 7,200 telemetry events during the 2-hour outage (at 1 event/second). Upon network restoration, the firmware's backlog processor attempted to serialize, compress, and transmit all buffered events as fast as possible. The combination of JSON serialization and TLS encryption for bulk transmission saturated the embedded CPU.",
+  "resolution_steps": [
+    "Verify the CPU spike duration corresponds to estimated backlog processing time",
+    "Implement rate-limiting on backlog transmission: maximum 100 events per second during catch-up",
+    "Add exponential backoff between backlog batches to prevent sustained CPU saturation",
+    "Configure backlog processing to run at reduced priority (nice level) to preserve headroom for real-time operations",
+    "Add telemetry age metadata so downstream systems can identify and appropriately handle delayed readings",
+    "Implement a maximum backlog size with oldest-first eviction to prevent unbounded growth during extended outages"
+  ],
+  "severity": "medium",
+  "failure_category": "network_recovery",
+  "tags": [
+    "cpu_usage",
+    "network",
+    "backlog",
+    "store_and_forward",
+    "burst",
+    "recovery"
+  ]
+}

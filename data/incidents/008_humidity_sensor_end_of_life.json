@@ -1,0 +1,26 @@
+{
+  "title": "Gradual humidity sensor degradation indicating end-of-life failure mode",
+  "description": "A humidity sensor deployed for 4 years began reporting increasingly erratic readings over a 2-week period. Values oscillated between 20% and 80% RH without corresponding environmental changes. Adjacent sensors reported stable readings throughout. The sensor's self-diagnostic reported no errors.",
+  "affected_device_types": [
+    "humidity_sensor",
+    "environmental_monitor"
+  ],
+  "root_cause": "Capacitive humidity sensors have a finite operational lifespan (typically 5-7 years). The sensing element's polymer layer degrades over time due to exposure to ambient contaminants, causing increased hysteresis and eventually random output. This device was approaching its rated end-of-life at 4 years in a high-particulate environment that accelerates degradation.",
+  "resolution_steps": [
+    "Compare affected sensor readings against adjacent sensors to confirm isolated failure",
+    "Check device deployment date against manufacturer's rated lifespan",
+    "Replace the sensor with a new unit of the same model",
+    "Calibrate the replacement sensor against a reference standard",
+    "Update device registry with new sensor serial number and installation date",
+    "Implement proactive replacement schedule based on manufacturer's rated lifespan minus 20% safety margin"
+  ],
+  "severity": "medium",
+  "failure_category": "hardware_degradation",
+  "tags": [
+    "humidity",
+    "end_of_life",
+    "degradation",
+    "single_device",
+    "erratic_readings"
+  ]
+}

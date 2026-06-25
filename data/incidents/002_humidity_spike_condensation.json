@@ -1,0 +1,17 @@
+{
+  "title": "Humidity sensor spike caused by HVAC condensation event",
+  "description": "Humidity sensors in the warehouse monitoring zone reported sudden readings above 95% RH, triggering critical alerts. The spike occurred simultaneously across 4 sensors in adjacent positions. Prior readings were stable at 45-50% RH. The event coincided with the HVAC system transitioning from cooling to heating mode during an overnight temperature drop.",
+  "affected_device_types": ["humidity_sensor", "environmental_monitor"],
+  "root_cause": "The HVAC mode transition caused a rapid temperature change in the air handling ducts. Cold air from the cooling cycle met warm air from the heating cycle at the duct junction near the sensor cluster, creating localized condensation. The condensation formed on sensor surfaces, causing artificially high readings. This is a known failure mode when HVAC systems lack anti-short-cycle timers.",
+  "resolution_steps": [
+    "Verify readings are artificial by cross-referencing with temperature sensor data showing no corresponding temperature drop",
+    "Allow sensors to dry naturally; readings should normalize within 30-60 minutes",
+    "If readings persist above 90% after 2 hours, physically inspect sensors for water damage",
+    "Configure HVAC anti-short-cycle timer to minimum 10-minute delay between mode transitions",
+    "Install condensation shields on sensors positioned near HVAC duct junctions",
+    "Add correlation rule: suppress humidity alerts when HVAC mode transition occurred within previous 15 minutes"
+  ],
+  "severity": "medium",
+  "failure_category": "environmental",
+  "tags": ["humidity", "hvac", "condensation", "false_positive", "multi_device", "correlated"]
+}

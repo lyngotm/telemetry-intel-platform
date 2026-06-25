@@ -1,6 +1,5 @@
 """
-Configuration for the API Gateway service.
-Loads settings from environment variables (with .env file support).
+Configuration for the Diagnosis Service.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
 
     # PostgreSQL
@@ -22,29 +21,13 @@ class Settings(BaseSettings):
 
     # Kafka
     kafka_bootstrap_servers: str = "localhost:9093"
-    kafka_topic_raw: str = "telemetry.raw"
-    kafka_topic_enriched: str = "telemetry.enriched"
-    kafka_topic_dlq: str = "telemetry.dlq"
-    kafka_publish_timeout_seconds: float = 5.0
-
-    # API
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
-
-    # JWT Authentication
-    jwt_private_key_path: str = "keys/private.pem"
-    jwt_public_key_path: str = "keys/public.pem"
-    jwt_algorithm: str = "RS256"
-    jwt_expiry_minutes: int = 60
-
-    # Rate Limiting (requests per minute)
-    rate_limit_ingestion: int = 1000
-    rate_limit_query: int = 100
+    kafka_topic_anomalies: str = "anomalies.detected"
+    kafka_consumer_group: str = "diagnosis-service-group"
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # ChromaDB (Vector Store)
+    # ChromaDB
     chroma_host: str = "localhost"
     chroma_port: int = 8100
 
@@ -54,6 +37,14 @@ class Settings(BaseSettings):
     bedrock_embedding_model_id: str = ""
     embedding_provider: str = "bedrock"  # "bedrock" or "local"
 
+    # RAG Configuration
+    context_window_minutes: int = 30  # How far back to look for recent telemetry
+    retrieval_top_k: int = 5  # Number of ChromaDB results to retrieve
+
+    # Metrics
+    metrics_port: int = 9092
+
+    # Logging
     log_level: str = "INFO"
 
     @property
@@ -65,5 +56,5 @@ class Settings(BaseSettings):
         )
 
 
-# Singleton instance — import this wherever you need config
+# Singleton instance
 settings = Settings()

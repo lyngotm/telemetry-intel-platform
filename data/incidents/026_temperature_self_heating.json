@@ -1,0 +1,26 @@
+{
+  "title": "Temperature sensor self-heating error from increased measurement frequency",
+  "description": "After a configuration change increased the temperature measurement frequency from once per 30 seconds to once per second, the sensor began reporting readings consistently 2-3\u00b0C above the reference thermometer. The offset appeared immediately after the configuration change and is constant regardless of ambient temperature.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "environmental_monitor"
+  ],
+  "root_cause": "The sensor's excitation current (used to measure the resistance of the RTD element) generates heat within the sensing element itself. At the original 30-second measurement interval, the element had time to dissipate this heat between readings. At 1-second intervals, the cumulative self-heating raises the element temperature above ambient, creating a systematic positive offset. This is a documented characteristic of RTD sensors specified in the datasheet.",
+  "resolution_steps": [
+    "Review sensor datasheet for self-heating specification at the configured excitation current",
+    "Reduce measurement frequency back to a rate that allows thermal dissipation (typically 10+ seconds between readings)",
+    "If high-frequency measurement is required, reduce excitation current (may reduce measurement resolution)",
+    "Apply a self-heating correction factor based on the manufacturer's specified thermal resistance",
+    "Consider using a sensor with lower self-heating specification (e.g., thin-film RTD vs wire-wound)",
+    "Document maximum recommended measurement frequency for each sensor type in deployment guidelines"
+  ],
+  "severity": "low",
+  "failure_category": "configuration_error",
+  "tags": [
+    "temperature",
+    "self_heating",
+    "configuration",
+    "measurement_frequency",
+    "offset"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "title": "Daily CPU usage spike at midnight caused by log rotation and compression",
+  "description": "Edge gateway devices consistently show a CPU spike to 60-70% at exactly 00:00 UTC every day, lasting 30-90 seconds. The spike is predictable and repeatable. It does not correlate with any telemetry load changes or external events.",
+  "affected_device_types": [
+    "edge_gateway",
+    "iot_controller"
+  ],
+  "root_cause": "The device's logrotate cron job triggers at midnight UTC, compressing the previous day's application logs using gzip. The compression operation is CPU-intensive on the embedded processor, particularly when log verbosity is set to DEBUG and the daily log file exceeds 50MB. The duration varies based on log file size, which depends on telemetry throughput that day.",
+  "resolution_steps": [
+    "Confirm by checking cron schedule and correlating with spike timing",
+    "Reduce log verbosity from DEBUG to INFO in production deployments to decrease log file size",
+    "Change compression algorithm from gzip to lz4 (faster with acceptable compression ratio)",
+    "Schedule log rotation during a known low-activity period for the specific deployment",
+    "Implement log size limits to cap the maximum file size requiring compression",
+    "Add this known pattern to runbook documentation so operators can recognize it without investigation"
+  ],
+  "severity": "low",
+  "failure_category": "scheduled_maintenance",
+  "tags": [
+    "cpu_usage",
+    "log_rotation",
+    "cron",
+    "periodic",
+    "predictable",
+    "expected_behavior"
+  ]
+}

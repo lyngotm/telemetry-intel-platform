@@ -6,6 +6,7 @@ These are injected into route handlers via Depends().
 from typing import AsyncGenerator
 
 import asyncpg
+import chromadb
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaProducer
 from fastapi import Request
@@ -30,4 +31,8 @@ async def get_kafka_producer(request: Request) -> AIOKafkaProducer:
 async def get_redis_client(request: Request) -> aioredis.Redis:
     """Returns the shared Redis client."""
     return request.app.state.redis_client
+
+def get_chroma_client(request: Request) -> chromadb.ClientAPI:
+    """Returns the shared ChromaDB client."""
+    return request.app.state.chroma_client
 

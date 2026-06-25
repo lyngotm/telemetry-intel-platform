@@ -1,0 +1,27 @@
+{
+  "title": "Temperature sensor noise caused by electromagnetic interference from VFD installation",
+  "description": "A temperature sensor installed near industrial equipment began showing erratic high-frequency noise (\u00b15\u00b0C fluctuations at sub-second intervals) after a new Variable Frequency Drive (VFD) was installed 3 meters away. Readings were stable before the VFD installation. The noise pattern follows the VFD operating schedule.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "industrial_monitor"
+  ],
+  "root_cause": "The VFD's pulse-width modulation switching (typically 4-16 kHz) generates electromagnetic interference that couples into the temperature sensor's analog signal wiring. The unshielded sensor cable acts as an antenna, picking up the EMI and introducing noise into the measurement. The correlation with VFD operating schedule confirms the interference source.",
+  "resolution_steps": [
+    "Confirm EMI source by correlating noise pattern with VFD start/stop schedule",
+    "Replace unshielded sensor cable with shielded twisted-pair cable, properly grounded at one end",
+    "Route sensor cable at least 30cm away from VFD power cables, crossing at 90\u00b0 angles only",
+    "Install a ferrite choke on the sensor cable near the measurement terminal",
+    "If wiring changes are impractical, add a hardware low-pass filter at the sensor input",
+    "Apply digital filtering (moving average of last 5 readings) in firmware as a software mitigation"
+  ],
+  "severity": "medium",
+  "failure_category": "electromagnetic_interference",
+  "tags": [
+    "temperature",
+    "emi",
+    "vfd",
+    "noise",
+    "industrial",
+    "wiring"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "title": "Pressure readings offset after device relocation to different elevation",
+  "description": "A pressure sensor was relocated from a ground-floor installation to a rooftop equipment room (15 meters higher elevation). Post-relocation, readings show a consistent offset of approximately -180 Pa from expected values. The offset is constant regardless of weather conditions.",
+  "affected_device_types": [
+    "pressure_sensor",
+    "environmental_monitor"
+  ],
+  "root_cause": "The device was configured with altitude compensation for its original ground-floor installation. After relocation to the rooftop (15m elevation change), the altitude compensation was not updated. Atmospheric pressure decreases approximately 12 Pa per meter of elevation gain, resulting in the ~180 Pa offset. The sensor is reading correctly for its new altitude but the compensation setting creates an apparent error.",
+  "resolution_steps": [
+    "Verify the elevation change between old and new installation locations",
+    "Calculate expected pressure offset (approximately 12 Pa per meter of elevation)",
+    "Update the device's altitude compensation setting to reflect new installation height",
+    "Verify corrected readings against a calibrated reference barometer at the same location",
+    "Update the device registry with new location and elevation metadata",
+    "Add altitude compensation verification to the sensor relocation checklist"
+  ],
+  "severity": "low",
+  "failure_category": "configuration_error",
+  "tags": [
+    "pressure",
+    "calibration",
+    "relocation",
+    "altitude",
+    "constant_offset",
+    "configuration"
+  ]
+}
