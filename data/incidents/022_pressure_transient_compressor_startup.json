@@ -1,0 +1,27 @@
+{
+  "title": "Pressure transient during HVAC compressor startup misidentified as anomaly",
+  "description": "Pressure sensors in the HVAC-monitored zone report brief spikes of 5-10% above baseline lasting 3-8 seconds, occurring at irregular intervals throughout the day. The transients appear to have no pattern but always resolve immediately.",
+  "affected_device_types": [
+    "pressure_sensor",
+    "hvac_monitor"
+  ],
+  "root_cause": "Each transient corresponds to an HVAC compressor start cycle. When the compressor engages, it creates a momentary pressure pulse in the ductwork before the system reaches steady-state airflow. The irregular timing corresponds to the thermostat-driven on/off cycling of the HVAC system. These are normal operational transients that are too brief to affect room conditions but are captured by the high-frequency pressure sensors.",
+  "resolution_steps": [
+    "Correlate pressure transients with HVAC compressor start events from the building management system",
+    "Implement a minimum duration filter: only alert on pressure deviations sustained for more than 30 seconds",
+    "Alternatively, apply a moving average or low-pass filter to pressure readings to smooth transients",
+    "Document expected transient characteristics for operator training",
+    "If transients exceed 15% magnitude, investigate ductwork sizing or damper configuration",
+    "Consider reducing sensor sampling rate if sub-second transients are not operationally relevant"
+  ],
+  "severity": "low",
+  "failure_category": "expected_behavior",
+  "tags": [
+    "pressure",
+    "transient",
+    "hvac",
+    "compressor",
+    "false_positive",
+    "brief_duration"
+  ]
+}

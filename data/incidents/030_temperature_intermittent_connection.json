@@ -1,0 +1,28 @@
+{
+  "title": "Intermittent temperature spikes from loose sensor connector causing contact resistance",
+  "description": "A temperature sensor reports brief spikes of 10-20\u00b0C above baseline at irregular intervals (minutes to hours apart). Each spike lasts exactly one measurement cycle (30 seconds) and then returns to normal. Mechanical vibration from nearby equipment seems to increase spike frequency.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "industrial_monitor"
+  ],
+  "root_cause": "A loose connector at the sensor junction box creates intermittent high contact resistance in the measurement circuit. When the connector's contact resistance increases (due to vibration), the additional resistance in the RTD circuit is interpreted as higher temperature. The single-cycle duration indicates the contact condition changes randomly between measurements. Vibration exacerbates the issue by physically displacing the connector contacts.",
+  "resolution_steps": [
+    "Inspect sensor connector and junction box for signs of loose or corroded connections",
+    "Clean connector contacts with appropriate electrical contact cleaner",
+    "Re-seat and secure the connector with proper torque specification",
+    "If connector shows wear or corrosion, replace with new mating pair",
+    "Apply vibration-resistant locking mechanism (connector retaining clip or thread lock)",
+    "Verify fix by monitoring for 48 hours under normal vibration conditions",
+    "Implement spike detection rule: flag readings that deviate significantly for exactly one sample then return to baseline"
+  ],
+  "severity": "medium",
+  "failure_category": "wiring_fault",
+  "tags": [
+    "temperature",
+    "intermittent",
+    "connector",
+    "vibration",
+    "contact_resistance",
+    "spike"
+  ]
+}

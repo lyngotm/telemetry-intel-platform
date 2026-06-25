@@ -1,0 +1,27 @@
+{
+  "title": "Sudden pressure drop in cleanroom triggered by airlock door malfunction",
+  "description": "Pressure sensors in Cleanroom B reported a sudden 30% drop in differential pressure, falling below the required positive-pressure threshold. The drop occurred over approximately 10 seconds and triggered immediate contamination risk alerts. The event coincided with a logged entry into the cleanroom airlock.",
+  "affected_device_types": [
+    "pressure_sensor",
+    "cleanroom_monitor"
+  ],
+  "root_cause": "The cleanroom airlock interlock mechanism failed to prevent both doors from being open simultaneously. When the inner door opened before the outer door fully sealed, the pressure differential equalized with the corridor. The interlock failure was caused by a misaligned door sensor magnet that reported the outer door as closed when it was ajar by 2cm.",
+  "resolution_steps": [
+    "Immediately initiate cleanroom contamination assessment protocol",
+    "Inspect airlock door sensors and interlock mechanism",
+    "Realign or replace the door position sensor magnet",
+    "Verify interlock prevents simultaneous door opening after repair",
+    "Review pressure recovery time to confirm HVAC system is adequately sized",
+    "Add secondary door position verification (optical sensor backup)",
+    "Test interlock mechanism under various door positions to confirm reliable detection"
+  ],
+  "severity": "critical",
+  "failure_category": "mechanical_failure",
+  "tags": [
+    "pressure",
+    "cleanroom",
+    "door_malfunction",
+    "rapid_change",
+    "contamination_risk"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "title": "Humidity sensor reading 100% sustained due to water ingress into housing",
+  "description": "A single humidity sensor in the basement utility room reports a constant 100% RH reading. The reading does not fluctuate and has remained fixed at maximum for 48 hours. Adjacent sensors report normal readings of 55-60% RH. The sensor housing shows no visible external damage.",
+  "affected_device_types": [
+    "humidity_sensor",
+    "environmental_monitor"
+  ],
+  "root_cause": "Water ingress through a degraded cable gland seal allowed moisture to accumulate inside the sensor housing. The internal condensation saturated the sensing element, causing it to report maximum humidity regardless of ambient conditions. The cable gland O-ring had degraded due to age and exposure to cleaning chemicals used in the utility room.",
+  "resolution_steps": [
+    "Remove sensor from mounting and inspect housing for internal moisture",
+    "Dry the sensor completely in a desiccant chamber for 24-48 hours",
+    "Replace the cable gland seal with a chemical-resistant variant (e.g., EPDM or Viton)",
+    "Test sensor after drying; replace if readings do not return to accurate values",
+    "Apply conformal coating to PCB if water contact is suspected",
+    "Audit all sensors in chemical-exposure areas for seal integrity",
+    "Upgrade to IP67-rated housings in areas where cleaning chemicals are used"
+  ],
+  "severity": "medium",
+  "failure_category": "hardware_degradation",
+  "tags": [
+    "humidity",
+    "water_ingress",
+    "seal_failure",
+    "stuck_reading",
+    "single_device"
+  ]
+}

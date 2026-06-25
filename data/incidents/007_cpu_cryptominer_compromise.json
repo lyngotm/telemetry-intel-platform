@@ -1,0 +1,28 @@
+{
+  "title": "Unexpected CPU usage spike from unauthorized cryptocurrency mining process",
+  "description": "A single edge gateway device reported CPU usage jumping from a baseline of 20% to sustained 95-100% over a 4-hour period. The spike was isolated to one device while identical devices in the same deployment remained at normal levels. Network traffic analysis showed unusual outbound connections to unknown IP addresses on non-standard ports.",
+  "affected_device_types": [
+    "edge_gateway",
+    "iot_controller"
+  ],
+  "root_cause": "The device was compromised through an unpatched vulnerability in the web management interface (CVE-2025-XXXX). An attacker deployed a cryptocurrency mining payload that consumed all available CPU resources. The isolated nature of the spike (single device) and the network traffic pattern are characteristic indicators of cryptojacking.",
+  "resolution_steps": [
+    "Immediately isolate the affected device from the network",
+    "Capture forensic image of device storage before remediation",
+    "Identify the attack vector by reviewing access logs and open ports",
+    "Reimage the device with verified clean firmware",
+    "Apply security patches for all known vulnerabilities before reconnecting",
+    "Audit all devices of the same type for similar indicators of compromise",
+    "Implement network segmentation to limit lateral movement",
+    "Add outbound connection monitoring rules for non-standard ports"
+  ],
+  "severity": "critical",
+  "failure_category": "security_incident",
+  "tags": [
+    "cpu_usage",
+    "security",
+    "cryptominer",
+    "single_device",
+    "network_anomaly"
+  ]
+}

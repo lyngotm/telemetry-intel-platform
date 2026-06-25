@@ -1,0 +1,17 @@
+{
+  "title": "Correlated temperature spikes across multiple racks during generator test",
+  "description": "Temperature sensors across 12 devices in 3 separate racks simultaneously reported readings 20-30°C above baseline during a 45-minute window. The spikes appeared suddenly, sustained for the full duration, then returned to normal. No physical environmental changes were detected in the facility. The event timing correlated with a scheduled monthly generator transfer test.",
+  "affected_device_types": ["temperature_sensor", "rack_monitor", "edge_gateway"],
+  "root_cause": "During the generator transfer test, the facility's primary cooling system experienced a brief interruption (HVAC units reset during the power transition). While servers continued operating on generator power, the cooling system took 3-5 minutes to fully restart. The thermal mass of the equipment caused temperatures to rise rapidly without active cooling. The 45-minute duration represents the time for cooling to restore temperatures to baseline after the HVAC restart delay.",
+  "resolution_steps": [
+    "Verify correlation between temperature events and facility power/generator test schedule",
+    "Confirm all temperature readings returned to baseline within expected timeframe post-event",
+    "Request facilities team add HVAC to critical power circuit that doesn't transfer during generator tests",
+    "If HVAC cannot be moved to critical power, implement pre-cooling protocol before scheduled generator tests",
+    "Add suppression rule for temperature alerts during scheduled generator test windows (±15 minutes)",
+    "Document expected thermal behavior during transfer events for operator awareness"
+  ],
+  "severity": "low",
+  "failure_category": "environmental",
+  "tags": ["temperature", "correlated", "multi_device", "power_event", "scheduled_maintenance", "false_positive"]
+}

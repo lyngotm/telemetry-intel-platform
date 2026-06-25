@@ -1,0 +1,27 @@
+{
+  "title": "Periodic CPU spikes from Java-based gateway garbage collection pauses",
+  "description": "Edge gateway devices running the Java-based telemetry agent show periodic CPU spikes to 70-85% lasting 2-5 seconds every 15-30 minutes. Between spikes, CPU usage remains normal at 15-20%. The spikes do not correlate with telemetry load or external events. All devices running the Java agent exhibit this pattern.",
+  "affected_device_types": [
+    "edge_gateway",
+    "iot_controller"
+  ],
+  "root_cause": "The Java Virtual Machine's garbage collector performs periodic full GC cycles to reclaim unused memory. The default GC configuration (Parallel GC with 256MB max heap) causes stop-the-world pauses that consume significant CPU on the resource-constrained embedded hardware. The 15-30 minute interval corresponds to the heap filling rate at normal telemetry throughput.",
+  "resolution_steps": [
+    "Confirm GC as root cause by enabling verbose GC logging and correlating pause timestamps with CPU spikes",
+    "Tune JVM parameters: switch to G1GC (-XX:+UseG1GC) with smaller max pause target (-XX:MaxGCPauseMillis=200)",
+    "Reduce heap size if possible to decrease individual GC duration",
+    "Increase GC frequency with smaller generations to prevent large full-GC pauses",
+    "Consider migrating the telemetry agent to a non-GC language for embedded deployments",
+    "If pattern is acceptable, add suppression rule to ignore CPU spikes under 10 seconds duration"
+  ],
+  "severity": "low",
+  "failure_category": "software_configuration",
+  "tags": [
+    "cpu_usage",
+    "garbage_collection",
+    "java",
+    "periodic",
+    "expected_behavior",
+    "configuration"
+  ]
+}

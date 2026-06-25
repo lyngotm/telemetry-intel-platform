@@ -93,6 +93,22 @@ services:
       timeout: 5s
       retries: 3
   
+  # --- ChromaDB (Vector Store for RAG) ---
+  chromadb:
+    image: chromadb/chroma:1.5.9
+    container_name: tip-chromadb
+    ports:
+      - "8100:8000"
+    volumes:
+      - chroma_data:/data
+    environment:
+      ANONYMIZED_TELEMETRY: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ============================================================
   # OBSERVABILITY STACK
   # ============================================================
@@ -272,5 +288,6 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  chroma_data:
 
   

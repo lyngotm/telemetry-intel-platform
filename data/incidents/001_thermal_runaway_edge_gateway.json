@@ -1,0 +1,17 @@
+{
+  "title": "Thermal runaway on edge gateway devices due to fan assembly failure",
+  "description": "Multiple edge gateway devices in Building C reported sustained temperature readings above 85°C over a 15-minute period. Normal operating temperature for these devices is 45-55°C. The temperature increase was gradual (approximately 2°C per minute) rather than instantaneous, suggesting a cooling system degradation rather than an external heat source. Affected devices were co-located in a single server rack with shared cooling infrastructure.",
+  "affected_device_types": ["temperature_sensor", "edge_gateway"],
+  "root_cause": "The rack-mounted cooling fan assembly experienced bearing failure, reducing airflow by approximately 70%. The gradual temperature rise pattern is characteristic of progressive mechanical degradation rather than sudden failure. Post-incident inspection revealed metal shavings in the fan housing consistent with bearing wear.",
+  "resolution_steps": [
+    "Immediately reduce workload on affected devices to lower heat generation",
+    "Verify fan assembly RPM via firmware diagnostics interface",
+    "Replace failed fan assembly with rated replacement unit",
+    "Apply fresh thermal paste to heat sinks if temperature exceeded 90°C for more than 5 minutes",
+    "Monitor temperature readings for 24 hours post-repair to confirm resolution",
+    "Schedule preventive fan replacement for all units exceeding 18 months of operation"
+  ],
+  "severity": "high",
+  "failure_category": "thermal_management",
+  "tags": ["thermal", "hardware", "fan_failure", "gradual_onset", "co-located"]
+}

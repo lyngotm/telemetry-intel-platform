@@ -66,7 +66,7 @@ CREATE TABLE dead_letter_events (
 CREATE INDEX idx_dlq_failed_at ON dead_letter_events(failed_at DESC);
 
 -- ============================================================
--- Migration 002: Create anomalies table for the Anomaly Detection Service
+-- Anomalies table for the Anomaly Detection Service
 -- Stores detected anomalies with statistical context for downstream diagnosis.
 -- ============================================================
 
@@ -87,4 +87,49 @@ CREATE INDEX IF NOT EXISTS idx_anomalies_device_id ON anomalies(device_id);
 CREATE INDEX IF NOT EXISTS idx_anomalies_detected_at ON anomalies(detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_anomalies_device_time ON anomalies(device_id, detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_anomalies_severity ON anomalies(severity);
+
+-- ============================================================
+-- DIAGNOSES TABLE
+-- RAG-generated root-cause diagnoses linked to anomalies.
+-- Written by the Diagnosis Service after LLM generation completes.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS diagnoses (
+    diagnosis_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    anomaly_id UUID NOT NULL REFERENCES anomalies(anomaly_id),
+    root_cause_summary TEXT NOT NULL,
+    confidence_score DOUBLE PRECISION NOT NULL CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    supporting_evidence JSONB NOT NULL DEFAULT '[]',
+    recommended_actions JSONB NOT NULL DEFAULT '[]',
+    retrieved_incident_ids JSONB NOT NULL DEFAULT '[]',
+    raw_llm_response TEXT,
+    model_id VARCHAR(255),
+    generation_time_seconds DOUBLE PRECISION,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_diagnoses_anomaly_id ON diagnoses(anomaly_id);
+CREATE INDEX IF NOT EXISTS idx_diagnoses_generated_at ON diagnoses(generated_at DESC);
+
+-- ============================================================
+-- INCIDENTS KNOWLEDGE TABLE
+-- Historical incident corpus for the RAG knowledge base.
+-- Raw documents stored here; chunked embeddings stored in ChromaDB.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS incidents_knowledge (
+    incident_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(500) NOT NULL,
+    description TEXT NOT NULL,
+    affected_device_types JSONB NOT NULL DEFAULT '[]',
+    root_cause TEXT NOT NULL,
+    resolution_steps JSONB NOT NULL DEFAULT '[]',
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    failure_category VARCHAR(100) NOT NULL,
+    tags JSONB NOT NULL DEFAULT '[]',
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents_knowledge(severity);
+CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents_knowledge(failure_category);
 

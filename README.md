@@ -178,6 +178,12 @@ curl -X POST -H "Authorization: Bearer $VIEWER_TOKEN" http://localhost:8000/api/
 
 # View API documentation (open in browser)
 # Navigate to: http://localhost:8000/docs
+
+# Prometheus targets (all UP)
+# Open: http://localhost:9094/targets
+
+# Grafana dashboards (admin/admin)
+# Open: http://localhost:3000
 ```
 
 ### Local Development (with hot-reload)

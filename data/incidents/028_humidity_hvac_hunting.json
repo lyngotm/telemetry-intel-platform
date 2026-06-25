@@ -1,0 +1,29 @@
+{
+  "title": "Humidity oscillation caused by HVAC control loop hunting",
+  "description": "Humidity sensors in a climate-controlled room show regular oscillations of \u00b18% RH with a period of approximately 10 minutes. The oscillation is sinusoidal and continuous, never settling to a stable value. Temperature sensors show a corresponding but smaller oscillation of \u00b10.5\u00b0C.",
+  "affected_device_types": [
+    "humidity_sensor",
+    "temperature_sensor",
+    "hvac_monitor"
+  ],
+  "root_cause": "The HVAC proportional-integral-derivative (PID) controller has been tuned with excessive proportional gain for the room's thermal characteristics. This causes the control loop to overshoot the setpoint, then overcorrect in the opposite direction \u2014 a condition known as 'hunting.' The 10-minute period corresponds to the thermal time constant of the room. The humidity oscillation is larger because the dehumidification system has binary (on/off) control rather than proportional modulation.",
+  "resolution_steps": [
+    "Confirm hunting by plotting humidity and HVAC valve position over time (expect inverse correlation with phase lag)",
+    "Reduce PID proportional gain (Kp) by 30-50% as initial adjustment",
+    "Increase integral time constant (Ti) to reduce overshoot tendency",
+    "If available, enable proportional dehumidification control instead of binary mode",
+    "After PID adjustment, monitor for 24 hours to confirm oscillation amplitude decreases",
+    "If auto-tuning is available on the HVAC controller, initiate it during stable ambient conditions"
+  ],
+  "severity": "medium",
+  "failure_category": "control_system",
+  "tags": [
+    "humidity",
+    "temperature",
+    "hvac",
+    "oscillation",
+    "pid_tuning",
+    "hunting",
+    "control_loop"
+  ]
+}

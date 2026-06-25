@@ -129,7 +129,7 @@ class AnomalyDetectedMessage(BaseModel):
     """
     Schema for messages on the anomalies.detected Kafka topic.
     Published by the Anomaly Detection Service when a z-score threshold is breached.
-    Consumed by the Diagnosis Service (Week 5) to trigger RAG-based root-cause analysis.
+    Consumed by the Diagnosis Service to trigger RAG-based root-cause analysis.
     """
 
     anomaly_id: UUID
@@ -201,4 +201,64 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int  # seconds until expiry
     role: str
+
+
+# ============================================================
+# KNOWLEDGE & DIAGNOSIS MODELS
+# ============================================================
+
+
+class IncidentCreate(BaseModel):
+    """Request body for POST /api/v1/knowledge/ingest — a single incident document."""
+
+    title: str = Field(..., min_length=1, max_length=500, examples=["Thermal runaway on edge gateway devices"])
+    description: str = Field(..., min_length=10, examples=["Multiple edge gateway devices reported sustained temperature readings above 85°C..."])
+    affected_device_types: list[str] = Field(..., min_items=1, examples=[["temperature_sensor", "edge_gateway"]])
+    root_cause: str = Field(..., min_length=10, examples=["Fan assembly failure combined with ambient temperature spike..."])
+    resolution_steps: list[str] = Field(..., min_items=1, examples=[["Verify fan assembly RPM via firmware diagnostics", "Replace thermal paste if degraded"]])
+    severity: str = Field(..., pattern="^(low|medium|high|critical)$", examples=["high"])
+    failure_category: str = Field(..., min_length=1, max_length=100, examples=["thermal_management"])
+    tags: list[str] = Field(default_factory=list, examples=[["thermal", "hardware", "fan_failure"]])
+
+
+class IncidentResponse(BaseModel):
+    """Incident record as returned by the API."""
+
+    incident_id: UUID
+    title: str
+    description: str
+    affected_device_types: list[str]
+    root_cause: str
+    resolution_steps: list[str]
+    severity: str
+    failure_category: str
+    tags: list[str]
+    chunk_count: int
+    ingested_at: datetime
+
+
+class KnowledgeIngestResponse(BaseModel):
+    """Response body for POST /api/v1/knowledge/ingest."""
+
+    incident_id: UUID
+    title: str
+    chunk_count: int
+    message: str
+
+
+class DiagnosisResponse(BaseModel):
+    """RAG-generated diagnosis as returned by GET /api/v1/anomalies/{id}/diagnosis."""
+
+    diagnosis_id: UUID
+    anomaly_id: UUID
+    root_cause_summary: str
+    confidence_score: float = Field(..., ge=0.0, le=1.0)
+    supporting_evidence: list[str]
+    recommended_actions: list[str]
+    retrieved_incident_ids: list[UUID]
+    model_id: str | None = None
+    generation_time_seconds: float | None = None
+    generated_at: datetime
+
+
 

@@ -1,0 +1,28 @@
+{
+  "title": "Multiple sensor types showing correlated noise pattern from shared power supply ripple",
+  "description": "Temperature, humidity, and pressure sensors on the same monitoring panel simultaneously began showing \u00b13-5% oscillations at a regular 2-second interval. The oscillation pattern is identical across all three sensor types and appeared after a UPS battery replacement. Sensors on other panels are unaffected.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "humidity_sensor",
+    "pressure_sensor"
+  ],
+  "root_cause": "The replacement UPS battery has higher internal resistance than the original, causing increased voltage ripple on the sensor power rail during the inverter switching cycle (0.5 Hz switching frequency = 2-second oscillation period). The analog sensor circuits lack sufficient power supply rejection at this frequency, coupling the ripple into measurement outputs. The correlated pattern across sensor types confirms a shared power supply issue rather than independent sensor faults.",
+  "resolution_steps": [
+    "Measure power supply rail voltage with an oscilloscope to confirm ripple presence and frequency",
+    "Verify UPS battery specifications match the original unit's requirements",
+    "If battery specs are correct, add a linear voltage regulator between UPS output and sensor power rail",
+    "Alternatively, add additional capacitance (electrolytic + ceramic) at the sensor power input",
+    "Test replacement with the correct battery specification if available",
+    "Add power quality monitoring to critical sensor power circuits"
+  ],
+  "severity": "medium",
+  "failure_category": "power_quality",
+  "tags": [
+    "multi_sensor",
+    "power_supply",
+    "oscillation",
+    "correlated",
+    "ups",
+    "noise"
+  ]
+}

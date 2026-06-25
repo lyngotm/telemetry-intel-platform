@@ -1,0 +1,29 @@
+{
+  "title": "Apparent multi-device anomaly caused by NTP time synchronization failure",
+  "description": "Multiple sensors appeared to simultaneously report anomalous values when viewed on the monitoring dashboard. However, investigation revealed the readings themselves were normal \u2014 the apparent anomaly was caused by events from different time periods being displayed together due to incorrect timestamps. Devices had drifted up to 5 minutes from actual time.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "humidity_sensor",
+    "pressure_sensor",
+    "edge_gateway"
+  ],
+  "root_cause": "The NTP server used by the IoT device fleet became unreachable due to a firewall rule change. Without time synchronization, device clocks drifted at their individual crystal oscillator rates (typically \u00b120 ppm, or ~1.7 seconds per day). After several days, the cumulative drift caused time-series data to be misaligned when displayed on dashboards that assume synchronized timestamps.",
+  "resolution_steps": [
+    "Verify NTP server accessibility from the device network segment",
+    "Restore firewall rule allowing NTP traffic (UDP port 123) to the time server",
+    "Force immediate time resynchronization on all affected devices",
+    "Implement NTP reachability monitoring with alerting on loss of sync",
+    "Configure devices to report their sync status and estimated clock accuracy",
+    "Add a secondary NTP source for redundancy",
+    "Consider marking telemetry data with a clock-quality indicator for downstream processing"
+  ],
+  "severity": "medium",
+  "failure_category": "time_synchronization",
+  "tags": [
+    "multi_sensor",
+    "ntp",
+    "time_drift",
+    "false_positive",
+    "infrastructure"
+  ]
+}

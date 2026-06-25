@@ -1,0 +1,26 @@
+{
+  "title": "Temperature sensor affected by thermal radiation from newly installed adjacent equipment",
+  "description": "A temperature sensor monitoring ambient room conditions began reporting readings 5-8\u00b0C above baseline after new server hardware was installed in an adjacent rack. The elevation correlates with server workload patterns \u2014 higher during business hours, returning closer to baseline at night. The sensor is wall-mounted 2 meters from the new rack.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "room_monitor"
+  ],
+  "root_cause": "The newly installed server rack generates significant thermal radiation. The temperature sensor's proximity (2 meters) and direct line-of-sight to the rack exhaust means it measures a combination of ambient air temperature and radiated heat from the servers. The workload correlation confirms the source \u2014 server heat output follows processing demand patterns.",
+  "resolution_steps": [
+    "Verify correlation between elevated readings and server rack utilization metrics",
+    "Relocate sensor to a position shielded from direct thermal radiation (behind a partition or farther from heat sources)",
+    "If relocation is impractical, install a radiation shield between the sensor and heat source",
+    "Alternatively, add a second sensor in a thermally neutral position and use the average",
+    "Update baseline expectations if the sensor must remain in its current position",
+    "Document minimum distance requirements between temperature sensors and heat-generating equipment"
+  ],
+  "severity": "low",
+  "failure_category": "installation_error",
+  "tags": [
+    "temperature",
+    "thermal_coupling",
+    "equipment_change",
+    "workload_correlation",
+    "installation"
+  ]
+}

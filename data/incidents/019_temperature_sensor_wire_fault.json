@@ -1,0 +1,28 @@
+{
+  "title": "Temperature sensor reporting fixed value due to thermocouple wire break",
+  "description": "A thermocouple-based temperature sensor suddenly began reporting a fixed value of -40\u00b0C regardless of actual ambient conditions. The reading appeared instantaneously and has not varied since. The device's self-diagnostic reports no communication errors.",
+  "affected_device_types": [
+    "temperature_sensor",
+    "industrial_monitor"
+  ],
+  "root_cause": "The thermocouple wire developed an open circuit (break) at the junction box terminal. When a thermocouple circuit is open, the measurement circuit reads a voltage corresponding to the cold-junction temperature of the measurement IC, which is typically calibrated to report -40\u00b0C as a fault indication. The break was caused by corrosion at the terminal due to moisture exposure in the junction box.",
+  "resolution_steps": [
+    "Recognize -40\u00b0C fixed reading as a thermocouple open-circuit fault signature",
+    "Inspect thermocouple wiring from the sensor head to the measurement terminal",
+    "Check junction box for moisture, corrosion, or mechanical damage to terminals",
+    "Re-terminate or replace the thermocouple wire as needed",
+    "Apply dielectric grease to terminal connections to prevent future corrosion",
+    "Seal junction box against moisture ingress",
+    "Configure alerting to recognize fixed min/max value readings as sensor fault patterns"
+  ],
+  "severity": "high",
+  "failure_category": "wiring_fault",
+  "tags": [
+    "temperature",
+    "thermocouple",
+    "open_circuit",
+    "fixed_value",
+    "wiring",
+    "corrosion"
+  ]
+}
