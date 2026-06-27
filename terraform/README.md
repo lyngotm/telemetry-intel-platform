@@ -12,7 +12,7 @@ Defines the cloud infrastructure for the Telemetry Intelligence Platform.
 | RDS | RDS PostgreSQL (db.t3.medium) | Primary data store (devices, telemetry, anomalies) | ~$50 |
 | ElastiCache | ElastiCache Redis (cache.t3.micro) | Cache, rolling windows, rate limiting, metadata | ~$12 |
 | MSK | Managed Streaming for Kafka (t3.small × 2) | Event backbone (telemetry.raw, enriched, dlq, anomalies) | ~$130 |
-| ECR | Elastic Container Registry | Docker image storage (4 repos) | ~$1 |
+| ECR | Elastic Container Registry | Docker image storage (5 repos) | ~$1 |
 | IAM | IAM Roles + Policies | EKS node permissions, Bedrock access (Week 5) | Free |
 
 **Estimated total: ~$360/month** (dev configuration, single-AZ where possible)

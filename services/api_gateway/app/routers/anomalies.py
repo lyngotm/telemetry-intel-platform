@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from services.api_gateway.app.dependencies import get_db_connection
 from services.api_gateway.app.rate_limiter import require_rate_limit
 from services.api_gateway.app.rbac import require_role
-from shared.models.models import AnomalyResponse, APIListResponse, APIResponse, UserPayload
+from shared.models.models import AnomalyResponse, APIListResponse, APIResponse, DiagnosisResponse, UserPayload
 
 logger = logging.getLogger("api_gateway")
 
@@ -168,3 +168,125 @@ async def get_anomaly(
         success=True,
         data=anomaly.model_dump(mode="json"),
     )
+
+
+@router.get(
+    "/{anomaly_id}/diagnosis",
+    response_model=APIResponse,
+)
+async def get_anomaly_diagnosis(
+    anomaly_id: UUID,
+    conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("viewer")),
+    _rate_limit: None = Depends(require_rate_limit("query")),
+):
+    """
+    Retrieve the RAG-generated diagnosis for a specific anomaly.
+
+    Returns the full diagnosis if generation is complete, or a pending
+    status if the Diagnosis Service hasn't processed the anomaly yet.
+
+    The Diagnosis Service consumes from the anomalies.detected Kafka topic
+    and generates diagnoses asynchronously — there may be a delay of
+    10-30 seconds between anomaly detection and diagnosis availability.
+    """
+    # Verify the anomaly exists
+    anomaly_row = await conn.fetchrow(
+        "SELECT anomaly_id FROM anomalies WHERE anomaly_id = $1",
+        anomaly_id,
+    )
+
+    if not anomaly_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anomaly {anomaly_id} not found",
+        )
+
+    # Check for diagnosis
+    row = await conn.fetchrow(
+        """
+        SELECT diagnosis_id, anomaly_id, root_cause_summary, confidence_score,
+               supporting_evidence, recommended_actions, retrieved_incident_ids,
+               model_id, generation_time_seconds, generated_at
+        FROM diagnoses
+        WHERE anomaly_id = $1
+        ORDER BY generated_at DESC
+        LIMIT 1
+        """,
+        anomaly_id,
+    )
+
+    if not row:
+        return APIResponse(
+            success=True,
+            data={"status": "pending", "message": "Diagnosis is being generated"},
+            message="Diagnosis not yet available",
+        )
+
+    diagnosis = DiagnosisResponse(
+        diagnosis_id=row["diagnosis_id"],
+        anomaly_id=row["anomaly_id"],
+        root_cause_summary=row["root_cause_summary"],
+        confidence_score=row["confidence_score"],
+        supporting_evidence=json.loads(row["supporting_evidence"])
+        if isinstance(row["supporting_evidence"], str)
+        else row["supporting_evidence"],
+        recommended_actions=json.loads(row["recommended_actions"])
+        if isinstance(row["recommended_actions"], str)
+        else row["recommended_actions"],
+        retrieved_incident_ids=json.loads(row["retrieved_incident_ids"])
+        if isinstance(row["retrieved_incident_ids"], str)
+        else row["retrieved_incident_ids"],
+        model_id=row["model_id"],
+        generation_time_seconds=row["generation_time_seconds"],
+        generated_at=row["generated_at"],
+    )
+
+    return APIResponse(
+        success=True,
+        data=diagnosis.model_dump(mode="json"),
+        message="Diagnosis retrieved successfully",
+    )
+
+
+@router.patch(
+    "/{anomaly_id}/status",
+    response_model=APIResponse,
+)
+async def update_anomaly_status(
+    anomaly_id: UUID,
+    new_status: str,
+    conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("operator")),
+):
+    """
+    Update the status of an anomaly.
+    Valid statuses: open, acknowledged, resolved.
+    Requires operator role or above.
+    """
+    valid_statuses = {"open", "acknowledged", "resolved"}
+    if new_status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid status '{new_status}'. Must be one of: {valid_statuses}",
+        )
+
+    result = await conn.execute(
+        "UPDATE anomalies SET status = $1 WHERE anomaly_id = $2",
+        new_status,
+        anomaly_id,
+    )
+
+    if result == "UPDATE 0":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anomaly {anomaly_id} not found",
+        )
+
+    return APIResponse(
+        success=True,
+        message=f"Anomaly status updated to '{new_status}'",
+        data={"anomaly_id": str(anomaly_id), "status": new_status},
+    )
+
+

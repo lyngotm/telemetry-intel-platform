@@ -29,6 +29,12 @@ data:
           - targets: ["anomaly-detection:9091"]
             labels:
               service: "anomaly-detection"
+      
+      - job_name: "diagnosis-service"
+        static_configs:
+          - targets: ["diagnosis-service:9092"]
+            labels:
+              service: "diagnosis-service"
 
 # ============================================================
 # Prometheus Deployment + Service

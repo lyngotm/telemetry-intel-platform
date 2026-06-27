@@ -390,6 +390,7 @@ resource "aws_ecr_repository" "services" {
     "ingestion-consumer",
     "anomaly-detection",
     "simulator",
+    "diagnosis-service",
   ])
 
   name                 = "${var.project_name}/${each.key}"
@@ -442,7 +443,11 @@ resource "aws_iam_role_policy" "bedrock_access" {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
         ]
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/*"
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/*",
+          "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+          "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*",
+        ]
       },
       {
         Effect = "Allow"

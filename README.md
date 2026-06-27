@@ -84,10 +84,10 @@ flowchart LR
 | Event Backbone | Apache Kafka (aiokafka) |
 | Primary Store | PostgreSQL (asyncpg) |
 | Cache / State | Redis |
-| Vector Store | ChromaDB (Week 5) |
-| LLM / Embeddings | AWS Bedrock — Titan + Claude (Week 5) |
+| Vector Store | ChromaDB |
+| LLM / Embeddings | AWS Bedrock — Cohere Embed + Claude |
 | Orchestration | Kubernetes (kind) + Terraform |
-| Observability | Prometheus + Grafana (Week 4) |
+| Observability | Prometheus + Grafana |
 | Testing | pytest + pytest-asyncio |
 
 ## Current Status
@@ -121,12 +121,23 @@ flowchart LR
 - HPA for API Gateway (CPU target 70%, 1–5 replicas)
 - Terraform defining production AWS infrastructure (VPC, EKS, RDS, ElastiCache, MSK, ECR, IAM)
 
+**Week 5 ✅ — RAG Diagnosis Pipeline**
+- Knowledge Ingestion: 30 synthetic incident reports chunked, embedded (Cohere Embed v4), and stored in ChromaDB + PostgreSQL
+- Diagnosis Service: Kafka consumer on `anomalies.detected` runs three-phase RAG pipeline (context → retrieval → generation)
+- AWS Bedrock integration via application inference profiles (Cohere Embed v4 for embeddings, Claude Haiku 4.5 for generation)
+- `GET /api/v1/anomalies/{id}/diagnosis` returns structured diagnosis or pending status
+- `POST /api/v1/knowledge/ingest` (admin) and `GET /api/v1/knowledge/incidents` (viewer+)
+- `PATCH /api/v1/anomalies/{id}/status` for workflow transitions (open → acknowledged → resolved)
+- Local embedding fallback (`EMBEDDING_PROVIDER=local`) for development without AWS credentials
+- Dockerfile, docker-compose, K8s manifests, Prometheus metrics (`diagnoses_generated_total`, `diagnosis_generation_seconds`)
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 - Docker with Compose plugin
-- Python 3.10+
+- Python 3.11+
 - uv (Python package manager)
 
 ### Setup
@@ -194,13 +205,14 @@ For active development, run infrastructure in Docker but services locally for in
 # Install dependencies
 uv sync --dev
 
-# Start infrastructure only (PostgreSQL + Kafka + Redis)
-docker compose up -d postgres zookeeper kafka kafka-init redis
+# Start infrastructure only (PostgreSQL + Kafka + Redis + ChromaDB)
+docker compose up -d postgres zookeeper kafka kafka-init redis chromadb
 
 # Start services individually (each in its own terminal)
 PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --port 8000
 PYTHONPATH=. uv run python -m services.ingestion_consumer.app.main
 PYTHONPATH=. uv run python -m services.anomaly_detection.app.main
+PYTHONPATH=. uv run python -m services.diagnosis_service.app.main
 PYTHONPATH=. uv run python -m services.simulator.app.main
 ```
 
@@ -221,6 +233,7 @@ PYTHONPATH=. uv run pytest -v -m "not manual"
 PYTHONPATH=. uv run pytest -v -m "manual"
 # docker start tip-redis tip-kafka
 ```
+---
 
 ## Kubernetes Deployment (kind)
 
@@ -248,6 +261,7 @@ docker compose build
 kind load docker-image telemetry-intel-platform-api-gateway:latest --name tip
 kind load docker-image telemetry-intel-platform-ingestion-consumer:latest --name tip
 kind load docker-image telemetry-intel-platform-anomaly-detection:latest --name tip
+kind load docker-image telemetry-intel-platform-diagnosis-service:latest --name tip
 ```
 
 ### Deploy (in dependency order)
@@ -257,6 +271,12 @@ kind load docker-image telemetry-intel-platform-anomaly-detection:latest --name 
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/secret.yaml
+kubectl create secret generic aws-credentials \
+  --from-literal=AWS_ACCESS_KEY_ID="$(aws configure get aws_access_key_id)" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="$(aws configure get aws_secret_access_key)" \
+  --from-literal=AWS_SESSION_TOKEN="$(aws configure get aws_session_token)" \
+  --namespace=tip \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 # 2. JWT keys secret (not committed — generate your own keys first)
 kubectl create secret generic jwt-keys \
@@ -267,7 +287,7 @@ kubectl create secret generic jwt-keys \
 # 3. PostgreSQL init script
 kubectl apply -f k8s/postgres-init-configmap.yaml
 
-# 4. Infrastructure (postgres, redis, zookeeper, kafka)
+# 4. Infrastructure (postgres, redis, zookeeper, kafka, chromadb)
 kubectl apply -f k8s/infrastructure.yaml
 kubectl wait --for=condition=Ready pods --all -n tip --timeout=120s
 
@@ -323,43 +343,146 @@ kubectl get hpa -n tip
 ```bash
 kind delete cluster --name tip
 ```
+---
+
+## RAG Diagnosis Pipeline
+
+The platform automatically generates root-cause diagnoses for detected anomalies using a Retrieval-Augmented Generation (RAG) pipeline powered by AWS Bedrock.
+
+### Architecture
+
+```mermaid
+flowchart TD
+    KAFKA[anomalies.detected] --> DS[Diagnosis Service]
+    DS -->|1. Context| PG[(PostgreSQL<br/>recent telemetry)]
+    DS -->|2. Embed query| BEDROCK_E[Cohere Embed v4<br/>via Bedrock]
+    BEDROCK_E --> CHROMA[(ChromaDB<br/>top-5 chunks)]
+    DS -->|3. Generate| BEDROCK_G[Claude Haiku 4.5<br/>via Bedrock]
+    CHROMA --> DS
+    DS -->|4. Persist| PG2[(PostgreSQL<br/>diagnoses table)]
+    API[GET /anomalies/id/diagnosis] --> PG2
+```
+
+### Knowledge Base
+
+The knowledge base contains 30 synthetic incident reports covering failure modes: thermal management, environmental factors, firmware bugs, hardware degradation, network issues, security incidents, and configuration errors.
+
+**Ingesting knowledge (admin only):**
+
+```bash
+# Single incident
+curl -X POST http://localhost:8000/api/v1/knowledge/ingest \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @data/incidents/001_thermal_runaway_edge_gateway.json
+
+# Batch ingest all incidents
+PYTHONPATH=. python scripts/ingest_incidents.py
+```
+
+**Incident document format:**
+
+```json
+{
+  "title": "Short descriptive title of the incident",
+  "description": "Detailed description of what was observed...",
+  "affected_device_types": ["temperature_sensor", "edge_gateway"],
+  "root_cause": "Explanation of the root cause...",
+  "resolution_steps": ["Step 1", "Step 2", "Step 3"],
+  "severity": "low|medium|high|critical",
+  "failure_category": "thermal_management|environmental|firmware_bug|...",
+  "tags": ["relevant", "search", "tags"]
+}
+```
+
+### Diagnosis Output
+When an anomaly is detected, the Diagnosis Service automatically generates a structured diagnosis (typically within 20-30 seconds):
+
+```json
+{
+  "root_cause_summary": "2-3 sentence explanation of the most likely root cause",
+  "confidence_score": 0.72,
+  "supporting_evidence": ["evidence point 1", "evidence point 2"],
+  "recommended_actions": ["action 1", "action 2"],
+  "retrieved_incident_ids": ["uuid1", "uuid2"]
+}
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BEDROCK_MODEL_ID` | — | ARN of the generation model (Claude Haiku 4.5) |
+| `BEDROCK_EMBEDDING_MODEL_ID` | — | ARN of the embedding model (Cohere Embed v4) |
+| `EMBEDDING_PROVIDER` | `bedrock` | Use `local` for ChromaDB's built-in model (no AWS needed) |
+| `CHROMA_HOST` | `localhost` | ChromaDB hostname |
+| `CHROMA_PORT` | `8100` | ChromaDB port (host-mapped; internal is 8000) |
+
+### Running Without AWS Credentials
+
+Set `EMBEDDING_PROVIDER=local` in `.env` to use ChromaDB's built-in embedding model (all-MiniLM-L6-v2, 384 dimensions) for knowledge ingestion and retrieval. This removes the AWS dependency for the embedding step only — the diagnosis generation step (Claude Haiku 4.5) still requires AWS Bedrock credentials. Without Bedrock credentials, incidents can be ingested and retrieved semantically, but automated diagnoses will not be generated.
+
+**Note**: You cannot mix embedding providers — if you ingest with `local`, you must query with `local`. Choose one provider per deployment and re-ingest if you switch.
+
+---
 
 ## Project Structure
 
 ```
 telemetry-intelligence-platform/
-├── docker-compose.yml          # Infrastructure (PostgreSQL, Kafka, Zookeeper, Redis)
+├── docker-compose.yml          # Full stack (PostgreSQL, Kafka, Redis, ChromaDB, apps, monitoring)
 ├── pyproject.toml              # Python dependencies
 ├── .env                        # Environment configuration
 ├── shared/                     # Shared code (models, utilities)
+│ ├── logging_config.py
+│ ├── metrics.py
 │ └── models/
+│ └── models.py
 ├── services/
-│ ├── api_gateway/              # FastAPI REST API (cache-aside via Redis)
+│ ├── api_gateway/              # FastAPI REST API (auth, RBAC, rate limiting, cache-aside)
 │ ├── ingestion_consumer/       # Kafka → Redis enrichment → PostgreSQL
 │ ├── anomaly_detection/        # Rolling window z-score detection
-│ └── simulator/                # Telemetry data generator
+│ ├── diagnosis_service         # RAG pipeline (context → retrieval → generation)
+│ └── simulator/                # Telemetry data generator with anomaly injection
+├── data/
+│ └── incidents/                # 30 synthetic incident reports (JSON) for RAG knowledge base
+├── scripts/
+│ ├── generate_incidents.py     # Generate synthetic incident files
+│ └── ingest_incidents.py       # Batch ingest incidents into knowledge base
 ├── db/
-│ └── init.sql                  # PostgreSQL schema (devices, telemetry_events, anomalies)
+│ └── init.sql                  # PostgreSQL schema (devices, telemetry_events, anomalies, diagnoses, incidents_knowledge)
+├── k8s/                        # Kubernetes manifests (kind)
+├── terraform/                  # AWS production infrastructure (EKS, RDS, ElastiCache, MSK, ECR)
+├── monitoring/ # Prometheus config + Grafana dashboards
 ├── tests/
 │ ├── unit/                     # Pure validation tests
-│ └── integration/              # Full pipeline + cache + anomaly tests
+│ └── integration/              # Full pipeline + RAG loop tests
 ├──  docs/
 │ └── decisions.md                # Architecture decision log
 ```
+---
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/devices` | Register a new device |
-| GET | `/api/v1/devices` | List registered devices |
-| POST | `/api/v1/telemetry` | Ingest telemetry event (→ Kafka, returns 202) |
-| GET | `/api/v1/telemetry` | Query historical telemetry with filters (cached, 60s TTL) |
-| GET | `/api/v1/anomalies` | Query detected anomalies (filter by device, severity, time range) |
-| GET | `/api/v1/anomalies/{id}` | Retrieve a single anomaly by ID |
-| GET | `/health` | Liveness check |
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/auth/token` | — | Obtain a JWT token |
+| POST | `/api/v1/devices` | operator | Register a new device |
+| GET | `/api/v1/devices` | viewer | List registered devices |
+| POST | `/api/v1/telemetry` | operator | Ingest telemetry event (→ Kafka, returns 202) |
+| GET | `/api/v1/telemetry` | viewer | Query historical telemetry with filters (cached, 60s TTL) |
+| GET | `/api/v1/anomalies` | viewer | Query detected anomalies (filter by device, severity, time range) |
+| GET | `/api/v1/anomalies/{id}` | viewer | Retrieve a single anomaly by ID |
+| GET | `/api/v1/anomalies/{id}/diagnosis` | viewer | Retrieve RAG-generated diagnosis (or pending status) |
+| PATCH | `/api/v1/anomalies/{id}/status` | operator | Update anomaly status (open, acknowledged, resolved) |
+| POST | `/api/v1/knowledge/ingest` | admin | Ingest an incident document into the knowledge base |
+| GET | `/api/v1/knowledge/incidents` | viewer | List ingested incident documents with filters |
+| GET | `/health` | — | Liveness check |
+| GET | `/ready` | — | Readiness check (verifies dependencies) |
 
 Full interactive API docs available at `/docs` when the API is running.
+
+---
 
 ## Authentication
 
@@ -385,10 +508,9 @@ curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/telemetry
 
 | Username | Password | Role | Access |
 |----------|----------|------|--------|
-| admin | admin123 | admin | Full access (all endpoints) |
-| operator | operator123 | operator | Read all + write telemetry + register devices |
-| viewer | viewer123 | viewer | Read-only (GET endpoints) |
-
+| admin | admin123 | admin | Full access (all endpoints + knowledge ingestion) |
+| operator | operator123 | operator | Read all + write telemetry + register devices + update anomaly status |
+| viewer | viewer123 | viewer | Read-only (GET endpoints only) |
 
 ### Token Lifetime
 
