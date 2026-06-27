@@ -62,6 +62,25 @@ KAFKA_PUBLISH_ERRORS = Counter(
     ["error_type"],
 )
 
+# ─── Business Metrics (Diagnosis Service) ────────────────────────
+
+DIAGNOSES_GENERATED = Counter(
+    "diagnoses_generated_total",
+    "Total RAG diagnoses successfully generated and persisted",
+    ["severity"],
+)
+
+DIAGNOSES_FAILED = Counter(
+    "diagnoses_failed_total",
+    "Total diagnosis generation failures",
+    ["phase"],  # context, retrieval, generation, persistence
+)
+
+DIAGNOSIS_GENERATION_SECONDS = Histogram(
+    "diagnosis_generation_seconds",
+    "End-to-end diagnosis pipeline duration in seconds",
+    buckets=(1.0, 2.5, 5.0, 10.0, 15.0, 20.0, 30.0, 45.0, 60.0, 90.0, 120.0),
+)
 
 # ─── Prometheus Middleware (API Gateway only) ─────────────────────
 

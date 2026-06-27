@@ -194,4 +194,59 @@ Documenting key design decisions and their rationale as the project evolves.
 **Tradeoff:** kind has no persistent storage by default — Kafka loses topics on pod restart (requires re-running the kafka-init Job). In production, AWS MSK provides durable storage natively. Local development requires a specific deployment order (infrastructure → kafka-init → applications) that wouldn't be needed with managed services.
 
 
+## 011: AWS Bedrock via Application Inference Profiles
+
+**Date:** 2026-06-23
+**Status:** Accepted
+
+**Context:** The RAG pipeline requires an embedding model (for indexing and retrieval) and a generation model (for producing diagnoses). Options considered: OpenAI (GPT-4 + text-embedding-3), self-hosted models (Ollama + local embeddings), or AWS Bedrock (managed access to multiple model providers).
+
+**Decision:** Use AWS Bedrock accessed through application inference profiles. Cohere Embed v4 for embeddings (1536 dimensions, asymmetric search via `input_type` parameter). Claude Haiku 4.5 for diagnosis generation (fast, cost-effective, structured JSON output). Both accessed via full ARN inference profile IDs rather than direct model IDs.
+
+**Rationale:**
+- Ecosystem alignment: The platform already uses AWS (Terraform defines EKS, RDS, ElastiCache, MSK). Adding Bedrock keeps all services within one cloud provider, simplifying IAM, networking, and billing.
+- No API keys to manage: Authentication uses IAM roles (IRSA in production, assumed roles in development). No secrets to rotate or store beyond AWS credentials.
+- Application inference profiles provide organization-level access control and cost tracking without managing individual model access grants.
+- Cohere Embed v4's `input_type` parameter (search_document vs search_query) improves retrieval accuracy through asymmetric embeddings — documents and queries are embedded differently for optimal matching.
+- Claude Haiku 4.5 provides sufficient quality for structured diagnosis output at ~10x lower cost and ~5x lower latency than larger models.
+
+**Tradeoff:** Vendor lock-in to AWS. The pipeline isolates all Bedrock calls in two small functions (`_generate_embeddings` and `_call_llm`) that could be swapped to OpenAI or local models by changing only those functions and the config. boto3 clients cache credentials and don't auto-refresh — services must be restarted when assumed-role sessions expire. In production, IRSA provides automatic credential rotation.
+
+
+## 012: Chunking Strategy — RecursiveCharacterTextSplitter with 2048 Characters / 200 Overlap
+
+**Date:** 2026-06-23
+**Status:** Accepted
+
+**Context:** Incident documents must be split into chunks for embedding and storage in ChromaDB. Options considered: fixed character split, token-based split (tiktoken `TokenTextSplitter`), or recursive character split with natural boundary detection.
+
+**Decision:** Use LangChain's `RecursiveCharacterTextSplitter` with `chunk_size=2048` characters (~512 tokens) and `chunk_overlap=200` characters (~50 tokens). Separators: `["\n\n", "\n", ". ", ", ", " ", ""]`.
+
+**Rationale:**
+- RecursiveCharacterTextSplitter preserves semantic boundaries by trying paragraph breaks, then sentence breaks, then word breaks before resorting to arbitrary character splits. For our short, structured incident documents (typically 500-1500 characters), this means most incidents fit in a single chunk without any splitting at all.
+- Character-based measurement avoids needing a tokenizer dependency (tiktoken). The approximation (4 chars ≈ 1 token for English) is sufficient for our use case where documents are short and chunk boundaries matter less than semantic coherence.
+- 200-character overlap ensures context continuity if a document does split across chunks — the end of one chunk appears at the start of the next, preserving sentence context at boundaries.
+- Token-based splitting (e.g., tiktoken `TokenTextSplitter`) guarantees exact token counts but may split mid-word or mid-sentence. For our structured incident reports where semantic boundaries matter more than exact token precision, recursive character splitting produces better retrieval results.
+
+**Tradeoff:** Not exact token counts — a "2048 character" chunk could be 400-600 tokens depending on content. This imprecision is acceptable because our documents are short (most fit in a single chunk) and embedding models handle variable-length inputs gracefully.
+
+
+## 013: Dual Storage — PostgreSQL + ChromaDB for Structured Queries and Semantic Search
+
+**Date:** 2026-06-23
+**Status:** Accepted
+
+**Context:** The RAG pipeline stores incident knowledge that must support two access patterns: structured queries (list incidents by severity, filter by category, paginate) and semantic search (find incidents similar to a given anomaly context). A single storage system cannot optimally serve both.
+
+**Decision:** Store incident documents in both PostgreSQL (`incidents_knowledge` table) and ChromaDB (`incident_embeddings` collection). PostgreSQL holds the complete structured record. ChromaDB holds chunked text with vector embeddings and metadata linking back to PostgreSQL via `incident_id`.
+
+**Rationale:**
+- PostgreSQL excels at structured queries: `SELECT * FROM incidents_knowledge WHERE severity = 'high' AND failure_category = 'thermal_management' ORDER BY ingested_at DESC LIMIT 10`. These queries power the `GET /api/v1/knowledge/incidents` API endpoint.
+- ChromaDB excels at semantic similarity: "find the 5 incident chunks most similar to this anomaly context embedding." This powers the retrieval phase of the RAG pipeline.
+- Metadata on ChromaDB chunks (`incident_id`, `severity`, `failure_category`) enables filtered semantic search if needed (e.g., only retrieve chunks from high-severity thermal incidents).
+- The `incidents_knowledge` table also serves as the source of truth for what's been ingested — if ChromaDB needs to be rebuilt, all documents can be re-chunked and re-embedded from PostgreSQL.
+
+**Tradeoff:** Data is duplicated across two stores. Ingestion must write to both (within a single operation in `knowledge.py`). If one write succeeds and the other fails, the stores become inconsistent. For this project, we accept this risk. Production would wrap both writes in a saga pattern or use a two-phase approach (write to PostgreSQL first as source of truth, then async embed/upsert to ChromaDB with retry).
+
+
 

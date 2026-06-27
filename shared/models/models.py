@@ -213,9 +213,9 @@ class IncidentCreate(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=500, examples=["Thermal runaway on edge gateway devices"])
     description: str = Field(..., min_length=10, examples=["Multiple edge gateway devices reported sustained temperature readings above 85°C..."])
-    affected_device_types: list[str] = Field(..., min_items=1, examples=[["temperature_sensor", "edge_gateway"]])
+    affected_device_types: list[str] = Field(..., min_length=1, examples=[["temperature_sensor", "edge_gateway"]])
     root_cause: str = Field(..., min_length=10, examples=["Fan assembly failure combined with ambient temperature spike..."])
-    resolution_steps: list[str] = Field(..., min_items=1, examples=[["Verify fan assembly RPM via firmware diagnostics", "Replace thermal paste if degraded"]])
+    resolution_steps: list[str] = Field(..., min_length=1, examples=[["Verify fan assembly RPM via firmware diagnostics", "Replace thermal paste if degraded"]])
     severity: str = Field(..., pattern="^(low|medium|high|critical)$", examples=["high"])
     failure_category: str = Field(..., min_length=1, max_length=100, examples=["thermal_management"])
     tags: list[str] = Field(default_factory=list, examples=[["thermal", "hardware", "fan_failure"]])

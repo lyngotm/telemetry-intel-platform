@@ -211,3 +211,52 @@ spec:
   ports:
     - port: 9092
       targetPort: 9092
+
+
+# ============================================================
+# ChromaDB (Vector Store for RAG)
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chromadb
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chromadb
+  template:
+    metadata:
+      labels:
+        app: chromadb
+    spec:
+      containers:
+        - name: chromadb
+          image: chromadb/chroma:1.5.9
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ANONYMIZED_TELEMETRY
+              value: "false"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromadb
+  namespace: tip
+spec:
+  selector:
+    app: chromadb
+  ports:
+    - port: 8000
+      targetPort: 8000
+

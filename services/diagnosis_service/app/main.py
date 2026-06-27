@@ -19,6 +19,9 @@ from aiokafka import AIOKafkaConsumer
 from services.diagnosis_service.app.config import settings
 from services.diagnosis_service.app.rag_pipeline import run_diagnosis_pipeline
 from shared.models.models import AnomalyDetectedMessage
+from prometheus_client import start_http_server
+from shared.metrics import DIAGNOSES_GENERATED, DIAGNOSES_FAILED, DIAGNOSIS_GENERATION_SECONDS
+
 
 # Setup logging
 logging.basicConfig(
@@ -78,6 +81,10 @@ async def run_consumer():
     Connects to Kafka, PostgreSQL, Redis, and ChromaDB, then processes
     anomaly events through the RAG pipeline in a loop.
     """
+    # --- Prometheus metrics ---
+    start_http_server(settings.metrics_port)
+    logger.info(f"Prometheus metrics available on port {settings.metrics_port}")
+
     # --- Setup resources ---
     db_pool = await asyncpg.create_pool(
         dsn=settings.database_url,
@@ -171,6 +178,7 @@ async def process_anomaly_message(
         anomaly = AnomalyDetectedMessage.model_validate_json(message.value)
     except Exception as e:
         logger.error(f"Failed to parse anomaly message: {e}")
+        DIAGNOSES_FAILED.labels(phase="context").inc()
         return
 
     logger.info(
@@ -179,24 +187,27 @@ async def process_anomaly_message(
         f"severity={anomaly.severity})"
     )
 
-    # --- Step 2: Run RAG pipeline ---
-    try:
-        diagnosis = await run_diagnosis_pipeline(
-            anomaly=anomaly,
-            db_pool=db_pool,
-            redis_client=redis_client,
-            chroma_client=chroma_client,
-        )
-    except Exception as e:
-        logger.error(
-            f"RAG pipeline failed for anomaly {anomaly.anomaly_id}: {e}",
-            exc_info=True,
-        )
-        return
+    # --- Step 2: Run RAG pipeline (timed) ---
+    with DIAGNOSIS_GENERATION_SECONDS.time():
+        try:
+            diagnosis = await run_diagnosis_pipeline(
+                anomaly=anomaly,
+                db_pool=db_pool,
+                redis_client=redis_client,
+                chroma_client=chroma_client,
+            )
+        except Exception as e:
+            logger.error(
+                f"RAG pipeline failed for anomaly {anomaly.anomaly_id}: {e}",
+                exc_info=True,
+            )
+            DIAGNOSES_FAILED.labels(phase="generation").inc()
+            return
 
     # --- Step 3: Persist diagnosis ---
     try:
         await persist_diagnosis(db_pool, anomaly.anomaly_id, diagnosis)
+        DIAGNOSES_GENERATED.labels(severity=anomaly.severity).inc()
         logger.info(
             f"Diagnosis persisted for anomaly {anomaly.anomaly_id}: "
             f"confidence={diagnosis['confidence_score']:.2f}, "
@@ -207,6 +218,7 @@ async def process_anomaly_message(
             f"Failed to persist diagnosis for anomaly {anomaly.anomaly_id}: {e}",
             exc_info=True,
         )
+        DIAGNOSES_FAILED.labels(phase="persistence").inc()
 
 
 if __name__ == "__main__":

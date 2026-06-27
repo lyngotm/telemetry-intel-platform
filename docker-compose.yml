@@ -104,10 +104,11 @@ services:
     environment:
       ANONYMIZED_TELEMETRY: "false"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat')"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000' 2>/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   # ============================================================
   # OBSERVABILITY STACK
@@ -168,6 +169,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      chromadb:
+        condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
     environment:
@@ -189,6 +192,12 @@ services:
       JWT_EXPIRY_MINUTES: 60
       RATE_LIMIT_INGESTION: 1000
       RATE_LIMIT_QUERY: 100
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
+      BEDROCK_EMBEDDING_MODEL_ID: ${BEDROCK_EMBEDDING_MODEL_ID:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-bedrock}
       LOG_LEVEL: INFO
     ports:
       - "8000:8000"
@@ -264,6 +273,42 @@ services:
       Z_SCORE_THRESHOLD_MEDIUM: 3
       Z_SCORE_THRESHOLD_HIGH: 3.5
       Z_SCORE_THRESHOLD_CRITICAL: 4
+      LOG_LEVEL: INFO
+    restart: on-failure
+
+  # --- Diagnosis Service ---
+  diagnosis-service:
+    build:
+      context: .
+      dockerfile: services/diagnosis_service/Dockerfile
+    container_name: tip-diagnosis-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_pass}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_ANOMALIES: anomalies.detected
+      KAFKA_CONSUMER_GROUP: diagnosis-service-group
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID}
+      BEDROCK_EMBEDDING_MODEL_ID: ${BEDROCK_EMBEDDING_MODEL_ID}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-bedrock}
       LOG_LEVEL: INFO
     restart: on-failure
 

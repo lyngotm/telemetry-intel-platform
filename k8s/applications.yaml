@@ -182,6 +182,77 @@ spec:
       targetPort: 9091
 
 # ============================================================
+# Diagnosis Service
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diagnosis-service
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: diagnosis-service
+  template:
+    metadata:
+      labels:
+        app: diagnosis-service
+    spec:
+      containers:
+        - name: diagnosis-service
+          image: telemetry-intel-platform-diagnosis-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 9092
+          envFrom:
+            - configMapRef:
+                name: tip-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tip-secrets
+                  key: POSTGRES_PASSWORD
+            - name: KAFKA_CONSUMER_GROUP
+              value: "diagnosis-service-group"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: AWS_SESSION_TOKEN
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diagnosis-service
+  namespace: tip
+spec:
+  selector:
+    app: diagnosis-service
+  ports:
+    - port: 9092
+      targetPort: 9092
+
+# ============================================================
 # HPA — API Gateway
 # ============================================================
 ---

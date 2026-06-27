@@ -1,6 +1,6 @@
 # Simulator configuration
-# api_url: "http://localhost:30080" # kind
-api_url: "http://localhost:8000" # local
+api_url: "http://localhost:30080" # kind
+# api_url: "http://localhost:8000" # local
 
 # Authentication
 auth_username: "operator"

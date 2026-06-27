@@ -44,6 +44,16 @@ data:
   Z_SCORE_THRESHOLD_HIGH: "3.5"
   Z_SCORE_THRESHOLD_CRITICAL: "4"
 
+  # ChromaDB
+  CHROMA_HOST: "chromadb"
+  CHROMA_PORT: "8000"
+
+  # AWS Bedrock
+  AWS_REGION: "us-west-2"
+  BEDROCK_MODEL_ID: "arn:aws:bedrock:us-west-2:233532778289:application-inference-profile/0zhhvnxrn29h"
+  BEDROCK_EMBEDDING_MODEL_ID: "arn:aws:bedrock:us-west-2:233532778289:application-inference-profile/5gxvs093jnun"
+  EMBEDDING_PROVIDER: "bedrock"
+  
   # Logging
   LOG_LEVEL: "INFO"
 

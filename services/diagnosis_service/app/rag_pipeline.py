@@ -42,13 +42,10 @@ async def build_context(
     redis_client: aioredis.Redis,
 ) -> dict:
     """
-    Gather contextual information for the anomaly:
-    - Recent telemetry history from PostgreSQL (last N minutes for device)
-    - Device metadata from Redis (with PostgreSQL fallback)
+    Gather recent telemetry history from PostgreSQL (last N minutes for device)
 
-    Returns a dict with 'recent_events', 'device_metadata', ready for prompt construction.
+    Returns a dict with 'recent_events'.
     """
-    # --- Recent telemetry from PostgreSQL ---
     cutoff = anomaly.detected_at - timedelta(minutes=settings.context_window_minutes)
 
     async with db_pool.acquire() as conn:
@@ -72,36 +69,12 @@ async def build_context(
         for row in rows
     ]
 
-    # --- Device metadata from Redis (cache-aside pattern) ---
-    device_metadata = {}
-    try:
-        cached = await redis_client.hgetall(f"device:{anomaly.device_id}")
-        if cached:
-            device_metadata = cached
-        else:
-            # Fallback to PostgreSQL
-            async with db_pool.acquire() as conn:
-                device_row = await conn.fetchrow(
-                    "SELECT device_type, location, firmware_version FROM devices WHERE device_id = $1",
-                    anomaly.device_id,
-                )
-                if device_row:
-                    device_metadata = {
-                        "device_type": device_row["device_type"],
-                        "location": device_row["location"] or "unknown",
-                        "firmware_version": device_row["firmware_version"] or "unknown",
-                    }
-    except Exception as e:
-        logger.warning(f"Failed to fetch device metadata: {e}")
-
     logger.info(
         f"Context built: {len(recent_events)} recent events, "
-        f"device_metadata={'populated' if device_metadata else 'empty'}"
     )
 
     return {
         "recent_events": recent_events,
-        "device_metadata": device_metadata,
     }
 
 
@@ -164,23 +137,18 @@ def _query_chromadb(
 
 async def retrieve_similar_incidents(
     anomaly: AnomalyDetectedMessage,
-    context: dict,
     chroma_client: chromadb.ClientAPI,
 ) -> list[dict]:
     """
-    Phase 2: Embed the anomaly context and retrieve similar incidents from ChromaDB.
+    Embed the anomaly and retrieve similar incidents from ChromaDB.
 
-    Constructs a query string from anomaly details + device context,
+    Constructs a query string from anomaly details,
     generates an embedding, and queries for top-k similar chunks.
     """
-    # Build query text combining anomaly details with device context
-    device_type = context["device_metadata"].get("device_type", anomaly.device_type or "unknown")
-    location = context["device_metadata"].get("location", anomaly.device_location or "unknown")
-
     query_text = (
         f"Anomaly detected: {anomaly.metric_type} reading of {anomaly.observed_value} "
         f"with z-score {anomaly.z_score:.2f} ({anomaly.severity} severity) "
-        f"on device type '{device_type}' at location '{location}'. "
+        f"on device type '{anomaly.device_type}' at location '{anomaly.device_location}'. "
         f"Expected range: mean {anomaly.expected_range.get('mean', 'unknown')} "
         f"with stddev {anomaly.expected_range.get('stddev', 'unknown')}."
     )
@@ -285,21 +253,18 @@ async def generate_diagnosis(
     retrieved_chunks: list[dict],
 ) -> dict:
     """
-    Phase 3: Build the prompt, call Claude, and parse the structured response.
+    Build the prompt, call Claude, and parse the structured response.
 
     Returns a dict with: root_cause_summary, confidence_score,
     supporting_evidence, recommended_actions, retrieved_incident_ids,
     raw_llm_response, generation_time_seconds.
     """
     # Build the user prompt from template
-    device_type = context["device_metadata"].get("device_type", anomaly.device_type or "unknown")
-    location = context["device_metadata"].get("location", anomaly.device_location or "unknown")
-
     user_prompt = USER_PROMPT_TEMPLATE.format(
         anomaly_id=anomaly.anomaly_id,
         device_id=anomaly.device_id,
-        device_type=device_type,
-        device_location=location,
+        device_type=anomaly.device_type,
+        device_location=anomaly.device_location,
         metric_type=anomaly.metric_type,
         observed_value=anomaly.observed_value,
         z_score=f"{anomaly.z_score:.2f}",
@@ -364,7 +329,7 @@ async def run_diagnosis_pipeline(
     context = await build_context(anomaly, db_pool, redis_client)
 
     # Phase 2: Retrieval
-    retrieved_chunks = await retrieve_similar_incidents(anomaly, context, chroma_client)
+    retrieved_chunks = await retrieve_similar_incidents(anomaly, chroma_client)
 
     # Phase 3: Generation
     diagnosis = await generate_diagnosis(anomaly, context, retrieved_chunks)
