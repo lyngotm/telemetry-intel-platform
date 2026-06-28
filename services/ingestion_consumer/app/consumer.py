@@ -46,6 +46,7 @@ async def process_message(
             producer=producer,
             original_payload=raw_value,
             error_reason=f"Schema validation failed: {str(e)}",
+            db_pool=db_pool,
         )
         EVENTS_DLQ.labels(reason="validation_failed").inc()
         return
@@ -59,6 +60,7 @@ async def process_message(
             producer=producer,
             original_payload=raw_value,
             error_reason=f"Device {event.device_id} not found during enrichment",
+            db_pool=db_pool,
         )
         EVENTS_DLQ.labels(reason="device_not_found").inc()
         return
@@ -86,6 +88,7 @@ async def process_message(
             producer=producer,
             original_payload=raw_value,
             error_reason=f"Foreign key violation: device {event.device_id} not registered",
+            db_pool=db_pool,
         )
         EVENTS_DLQ.labels(reason="fk_violation").inc()
         return
@@ -96,6 +99,7 @@ async def process_message(
             producer=producer,
             original_payload=raw_value,
             error_reason=f"Database error: {str(e)}",
+            db_pool=db_pool,
         )
         EVENTS_DLQ.labels(reason="db_error").inc()
         return
@@ -127,25 +131,56 @@ async def process_message(
     )
 
 
+def _is_valid_json(text: str) -> bool:
+    """Check if a string is valid JSON (for JSONB column storage)."""
+    try:
+        json.loads(text)
+        return True
+    except (json.JSONDecodeError, TypeError):
+        return False
+
+
 async def send_to_dlq(
     producer: AIOKafkaProducer,
     original_payload: str,
     error_reason: str,
+    db_pool: asyncpg.Pool | None = None,
 ) -> None:
     """
-    Send a failed message to the dead-letter queue topic.
-    Includes the original payload and the reason for failure.
+    Send a failed message to the dead-letter queue.
+    Publishes to the telemetry.dlq Kafka topic AND persists to the
+    dead_letter_events PostgreSQL table for queryability via the API.
     """
-    dlq_message = json.dumps({
-        "original_payload": original_payload,
-        "error_reason": error_reason,
-        "original_topic": settings.kafka_topic_raw,
-    })
+    dlq_message = json.dumps(
+        {
+            "original_payload": original_payload,
+            "error_reason": error_reason,
+            "original_topic": settings.kafka_topic_raw,
+        }
+    )
 
     await producer.send_and_wait(
         topic=settings.kafka_topic_dlq,
         value=dlq_message,
     )
 
+    # Persist to PostgreSQL for API queryability
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO dead_letter_events (original_topic, original_payload, error_reason)
+                    VALUES ($1, $2::jsonb, $3)
+                    """,
+                    settings.kafka_topic_raw,
+                    original_payload
+                    if _is_valid_json(original_payload)
+                    else json.dumps({"raw": original_payload}),
+                    error_reason,
+                )
+        except Exception as e:
+            # Don't fail the DLQ publish if persistence fails — log and continue
+            logger.error(f"Failed to persist DLQ event to PostgreSQL: {e}")
+
     logger.warning(f"Sent to DLQ: {error_reason}")
-    

@@ -133,7 +133,7 @@ async def run_simulator():
     async with httpx.AsyncClient(base_url=api_url, timeout=30.0) as client:
         token = await obtain_token(client, config)
         client.headers["Authorization"] = f"Bearer {token}"
-        
+
         # Register devices...
         logger.info(f"Registering {config['devices_count']} devices...")
         device_ids = await register_devices(client, config["devices_count"])
@@ -199,7 +199,11 @@ async def run_simulator():
                 f"Batch sent: {len(batch_tasks)} events | "
                 f"Total sent: {events_sent} | Failed: {events_failed} | "
                 f"Elapsed: {elapsed:.0f}s"
-                + (" | ANOMALY ACTIVE" if anomaly_config["enabled"] and elapsed > anomaly_config["start_after_seconds"] else "")
+                + (
+                    " | ANOMALY ACTIVE"
+                    if anomaly_config["enabled"] and elapsed > anomaly_config["start_after_seconds"]
+                    else ""
+                )
             )
 
             # Use wait_for so shutdown_event can interrupt the sleep
@@ -208,12 +212,9 @@ async def run_simulator():
             except asyncio.TimeoutError:
                 pass  # Normal — timeout means "keep going"
 
-        logger.info(
-            f"Simulator stopped. Total events sent: {events_sent}, failed: {events_failed}"
-        )
+        logger.info(f"Simulator stopped. Total events sent: {events_sent}, failed: {events_failed}")
 
         await print_anomaly_summary(client, device_ids, config)
-    
 
 
 async def send_event(client: httpx.AsyncClient, payload: dict) -> None:
@@ -235,7 +236,9 @@ async def print_anomaly_summary(client: httpx.AsyncClient, device_ids: list[UUID
     logger.info("--- Anomaly Injection Summary ---")
     anomaly_device_id = device_ids[anomaly_config["device_index"]]
     logger.info(f"Injected anomalies on device: {anomaly_device_id}")
-    logger.info(f"Metric: {anomaly_config['metric_type']}, Deviation: {anomaly_config['deviation_multiplier']}σ")
+    logger.info(
+        f"Metric: {anomaly_config['metric_type']}, Deviation: {anomaly_config['deviation_multiplier']}σ"
+    )
 
     # Query the anomalies API for this device
     try:

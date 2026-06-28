@@ -85,7 +85,9 @@ class TestFullPipeline:
 
         # --- Act: POST the event ---
         response = await api_client.post("/api/v1/telemetry", json=payload)
-        assert response.status_code == 202, f"Expected 202, got {response.status_code}: {response.text}"
+        assert response.status_code == 202, (
+            f"Expected 202, got {response.status_code}: {response.text}"
+        )
 
         # --- Wait for the consumer to process (poll database) ---
         event_found = False
@@ -219,6 +221,6 @@ class TestDeadLetterQueue:
         finally:
             await consumer.stop()
 
-        assert dlq_message_found, "Malformed message did not appear on telemetry.dlq within 10 seconds"
-
-
+        assert dlq_message_found, (
+            "Malformed message did not appear on telemetry.dlq within 10 seconds"
+        )

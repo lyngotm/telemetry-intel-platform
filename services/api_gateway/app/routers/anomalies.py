@@ -14,7 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from services.api_gateway.app.dependencies import get_db_connection
 from services.api_gateway.app.rate_limiter import require_rate_limit
 from services.api_gateway.app.rbac import require_role
-from shared.models.models import AnomalyResponse, APIListResponse, APIResponse, DiagnosisResponse, UserPayload
+from shared.models.models import (
+    AnomalyResponse,
+    APIListResponse,
+    APIResponse,
+    DiagnosisResponse,
+    UserPayload,
+)
 
 logger = logging.getLogger("api_gateway")
 
@@ -105,7 +111,9 @@ async def list_anomalies(
             device_id=row["device_id"],
             metric_type=row["metric_type"],
             observed_value=row["observed_value"],
-            expected_range=json.loads(row["expected_range"]) if isinstance(row["expected_range"], str) else row["expected_range"],
+            expected_range=json.loads(row["expected_range"])
+            if isinstance(row["expected_range"], str)
+            else row["expected_range"],
             z_score=row["z_score"],
             severity=row["severity"],
             detected_at=row["detected_at"],
@@ -156,7 +164,9 @@ async def get_anomaly(
         device_id=row["device_id"],
         metric_type=row["metric_type"],
         observed_value=row["observed_value"],
-        expected_range=json.loads(row["expected_range"]) if isinstance(row["expected_range"], str) else row["expected_range"],
+        expected_range=json.loads(row["expected_range"])
+        if isinstance(row["expected_range"], str)
+        else row["expected_range"],
         z_score=row["z_score"],
         severity=row["severity"],
         detected_at=row["detected_at"],
@@ -288,5 +298,3 @@ async def update_anomaly_status(
         message=f"Anomaly status updated to '{new_status}'",
         data={"anomaly_id": str(anomaly_id), "status": new_status},
     )
-
-

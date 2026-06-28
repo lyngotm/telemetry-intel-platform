@@ -98,7 +98,7 @@ class RollingWindow:
         count = len(values)
         mean = sum(values) / count
         variance = sum((v - mean) ** 2 for v in values) / count
-        stddev = variance ** 0.5
+        stddev = variance**0.5
 
         return WindowStats(
             mean=mean,

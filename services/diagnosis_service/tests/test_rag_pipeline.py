@@ -149,10 +149,7 @@ class TestChunking:
             # The last 200 chars of chunk i should overlap with start of chunk i+1
             # (overlap is 200 chars, but split may happen at natural boundaries)
             chunk_end = chunks[i][-100:]  # Last 100 chars
-            assert any(
-                chunk_end[:50] in chunks[i + 1][:300]
-                for _ in [1]
-            ) or len(chunks[i]) <= 2048
+            assert any(chunk_end[:50] in chunks[i + 1][:300] for _ in [1]) or len(chunks[i]) <= 2048
 
     def test_chunk_size_limit(self, sample_incident):
         """No chunk should exceed the configured chunk_size."""
@@ -186,7 +183,11 @@ class TestPromptFormatting:
     def test_format_recent_telemetry_limits_to_20(self):
         """Should limit output to most recent 20 events to control prompt length."""
         many_events = [
-            {"timestamp": f"2026-06-25T10:{i:02d}:00", "metric_type": "temperature", "value": 50.0 + i}
+            {
+                "timestamp": f"2026-06-25T10:{i:02d}:00",
+                "metric_type": "temperature",
+                "value": 50.0 + i,
+            }
             for i in range(50)
         ]
         result = format_recent_telemetry(many_events)
@@ -212,12 +213,22 @@ class TestPromptFormatting:
         chunks = [
             {
                 "document": "Chunk 1 content",
-                "metadata": {"incident_id": incident_id, "title": "Same incident", "severity": "high", "failure_category": "thermal"},
+                "metadata": {
+                    "incident_id": incident_id,
+                    "title": "Same incident",
+                    "severity": "high",
+                    "failure_category": "thermal",
+                },
                 "distance": 0.1,
             },
             {
                 "document": "Chunk 2 content",
-                "metadata": {"incident_id": incident_id, "title": "Same incident", "severity": "high", "failure_category": "thermal"},
+                "metadata": {
+                    "incident_id": incident_id,
+                    "title": "Same incident",
+                    "severity": "high",
+                    "failure_category": "thermal",
+                },
                 "distance": 0.2,
             },
         ]
@@ -233,12 +244,20 @@ class TestPromptFormatting:
     def test_user_prompt_template_has_all_placeholders(self):
         """User prompt template should contain all required format placeholders."""
         required_placeholders = [
-            "anomaly_id", "device_id", "metric_type", "observed_value",
-            "z_score", "severity", "detected_at", "recent_telemetry",
+            "anomaly_id",
+            "device_id",
+            "metric_type",
+            "observed_value",
+            "z_score",
+            "severity",
+            "detected_at",
+            "recent_telemetry",
             "retrieved_incidents",
         ]
         for placeholder in required_placeholders:
-            assert f"{{{placeholder}}}" in USER_PROMPT_TEMPLATE, f"Missing placeholder: {placeholder}"
+            assert f"{{{placeholder}}}" in USER_PROMPT_TEMPLATE, (
+                f"Missing placeholder: {placeholder}"
+            )
 
 
 # ─── LLM Response Parsing Tests ──────────────────────────────────
@@ -249,13 +268,15 @@ class TestResponseParsing:
 
     def test_valid_json_response(self):
         """Should parse well-formed JSON correctly."""
-        valid_response = json.dumps({
-            "root_cause_summary": "Fan failure caused thermal runaway.",
-            "confidence_score": 0.85,
-            "supporting_evidence": ["Temperature rose 2°C/min", "Single rack affected"],
-            "recommended_actions": ["Replace fan assembly", "Apply thermal paste"],
-            "retrieved_incident_ids": [str(uuid4())],
-        })
+        valid_response = json.dumps(
+            {
+                "root_cause_summary": "Fan failure caused thermal runaway.",
+                "confidence_score": 0.85,
+                "supporting_evidence": ["Temperature rose 2°C/min", "Single rack affected"],
+                "recommended_actions": ["Replace fan assembly", "Apply thermal paste"],
+                "retrieved_incident_ids": [str(uuid4())],
+            }
+        )
 
         result = _parse_diagnosis_response(valid_response)
 
@@ -285,11 +306,13 @@ class TestResponseParsing:
 
     def test_missing_fields_filled_with_defaults(self):
         """Should fill missing required fields with sensible defaults."""
-        partial_response = json.dumps({
-            "root_cause_summary": "Partial diagnosis",
-            "confidence_score": 0.5,
-            # missing: supporting_evidence, recommended_actions
-        })
+        partial_response = json.dumps(
+            {
+                "root_cause_summary": "Partial diagnosis",
+                "confidence_score": 0.5,
+                # missing: supporting_evidence, recommended_actions
+            }
+        )
 
         result = _parse_diagnosis_response(partial_response)
 
@@ -299,22 +322,26 @@ class TestResponseParsing:
 
     def test_confidence_score_clamped(self):
         """Should clamp confidence_score to [0.0, 1.0] range."""
-        over_response = json.dumps({
-            "root_cause_summary": "Test",
-            "confidence_score": 1.5,
-            "supporting_evidence": [],
-            "recommended_actions": [],
-        })
+        over_response = json.dumps(
+            {
+                "root_cause_summary": "Test",
+                "confidence_score": 1.5,
+                "supporting_evidence": [],
+                "recommended_actions": [],
+            }
+        )
 
         result = _parse_diagnosis_response(over_response)
         assert result["confidence_score"] == 1.0
 
-        under_response = json.dumps({
-            "root_cause_summary": "Test",
-            "confidence_score": -0.3,
-            "supporting_evidence": [],
-            "recommended_actions": [],
-        })
+        under_response = json.dumps(
+            {
+                "root_cause_summary": "Test",
+                "confidence_score": -0.3,
+                "supporting_evidence": [],
+                "recommended_actions": [],
+            }
+        )
 
         result = _parse_diagnosis_response(under_response)
         assert result["confidence_score"] == 0.0

@@ -6,11 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # PostgreSQL
     postgres_host: str = "localhost"
@@ -28,12 +24,12 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
-    
+
     # Prometheus
     metrics_port: int = 9090
 
     log_level: str = "INFO"
-    
+
     @property
     def database_url(self) -> str:
         return (

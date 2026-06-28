@@ -69,9 +69,7 @@ async def build_context(
         for row in rows
     ]
 
-    logger.info(
-        f"Context built: {len(recent_events)} recent events, "
-    )
+    logger.info(f"Context built: {len(recent_events)} recent events, ")
 
     return {
         "recent_events": recent_events,
@@ -92,10 +90,12 @@ def _generate_query_embedding(text: str) -> list[float]:
         modelId=settings.bedrock_embedding_model_id,
         contentType="application/json",
         accept="application/json",
-        body=json.dumps({
-            "texts": [text],
-            "input_type": "search_query",
-        }),
+        body=json.dumps(
+            {
+                "texts": [text],
+                "input_type": "search_query",
+            }
+        ),
     )
 
     response_body = json.loads(response["body"].read())
@@ -126,11 +126,13 @@ def _query_chromadb(
     chunks = []
     if results["documents"] and results["documents"][0]:
         for i in range(len(results["documents"][0])):
-            chunks.append({
-                "document": results["documents"][0][i],
-                "metadata": results["metadatas"][0][i],
-                "distance": results["distances"][0][i],
-            })
+            chunks.append(
+                {
+                    "document": results["documents"][0][i],
+                    "metadata": results["metadatas"][0][i],
+                    "distance": results["distances"][0][i],
+                }
+            )
 
     return chunks
 
@@ -164,9 +166,7 @@ async def retrieve_similar_incidents(
     chunks = await asyncio.to_thread(_sync_retrieve)
 
     distances = [f"{c['distance']:.3f}" for c in chunks]
-    logger.info(
-        f"Retrieved {len(chunks)} chunks from ChromaDB (distances: {distances})"
-    )
+    logger.info(f"Retrieved {len(chunks)} chunks from ChromaDB (distances: {distances})")
 
     return chunks
 
@@ -224,12 +224,20 @@ def _parse_diagnosis_response(raw_response: str) -> dict:
             "root_cause_summary": f"Unable to parse structured diagnosis. Raw response: {text[:200]}",
             "confidence_score": 0.1,
             "supporting_evidence": ["LLM response parsing failed"],
-            "recommended_actions": ["Review raw LLM response manually", "Check prompt template formatting"],
+            "recommended_actions": [
+                "Review raw LLM response manually",
+                "Check prompt template formatting",
+            ],
             "retrieved_incident_ids": [],
         }
 
     # Validate required fields exist
-    required_fields = {"root_cause_summary", "confidence_score", "supporting_evidence", "recommended_actions"}
+    required_fields = {
+        "root_cause_summary",
+        "confidence_score",
+        "supporting_evidence",
+        "recommended_actions",
+    }
     for field in required_fields:
         if field not in parsed:
             parsed[field] = [] if field in ("supporting_evidence", "recommended_actions") else ""
@@ -341,4 +349,3 @@ async def run_diagnosis_pipeline(
     )
 
     return diagnosis
-

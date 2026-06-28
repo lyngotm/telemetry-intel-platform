@@ -77,10 +77,8 @@ def format_recent_telemetry(events: list[dict]) -> str:
 
     lines = []
     for event in events[-20:]:  # Limit to most recent 20 to control prompt length
-        lines.append(
-            f"  {event['timestamp']} | {event['metric_type']}: {event['value']:.2f}"
-        )
-    
+        lines.append(f"  {event['timestamp']} | {event['metric_type']}: {event['value']:.2f}")
+
     header = f"Showing {len(lines)} most recent readings:"
     return header + "\n" + "\n".join(lines)
 

@@ -26,4 +26,3 @@ def setup_logging(service_name: str, level: str = "INFO") -> logging.Logger:
         logger.addHandler(handler)
 
     return logger
-    

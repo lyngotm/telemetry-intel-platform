@@ -33,9 +33,9 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-        # Anomaly detection parameters
+    # Anomaly detection parameters
     window_size_seconds: int = 300  # 5-minute rolling window
-    min_window_samples: int = 10   # Minimum readings before computing z-score
+    min_window_samples: int = 10  # Minimum readings before computing z-score
     z_score_threshold_low: float = 2.0
     z_score_threshold_medium: float = 2.5
     z_score_threshold_high: float = 3.0

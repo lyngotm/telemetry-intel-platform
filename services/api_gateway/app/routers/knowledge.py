@@ -128,7 +128,11 @@ async def list_incidents(
 
     # Total count for pagination
     count_query = f"SELECT COUNT(*) FROM incidents_knowledge {where_clause}"
-    total = await conn.fetchval(count_query, *params[:-2]) if conditions else await conn.fetchval(count_query)
+    total = (
+        await conn.fetchval(count_query, *params[:-2])
+        if conditions
+        else await conn.fetchval(count_query)
+    )
 
     incidents = [
         IncidentResponse(
@@ -156,4 +160,3 @@ async def list_incidents(
         data=[i.model_dump(mode="json") for i in incidents],
         count=total,
     )
-

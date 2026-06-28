@@ -24,7 +24,8 @@ logging.basicConfig(
 )
 # Only set DEBUG for our code
 logging.getLogger("ingestion_consumer").setLevel(
-    getattr(logging, settings.log_level.upper(), logging.INFO))
+    getattr(logging, settings.log_level.upper(), logging.INFO)
+)
 
 logger = logging.getLogger("ingestion_consumer")
 
@@ -34,7 +35,7 @@ async def run_consumer():
     Main entry point for the Ingestion Consumer.
     Connects to Kafka and PostgreSQL, then processes messages in a loop.
     """
-    
+
     start_http_server(settings.metrics_port)
     logger.info("Prometheus metrics available on port 9090")
 
@@ -121,4 +122,3 @@ async def run_consumer():
 
 if __name__ == "__main__":
     asyncio.run(run_consumer())
-    

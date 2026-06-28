@@ -21,11 +21,11 @@ INCIDENTS = [
             "Temporarily adjust alert thresholds for outdoor sensors during extreme weather events",
             "Confirm no equipment damage occurred due to sustained high temperatures",
             "Review thermal protection ratings of outdoor equipment",
-            "Consider implementing weather-aware dynamic thresholds for outdoor sensors"
+            "Consider implementing weather-aware dynamic thresholds for outdoor sensors",
         ],
         "severity": "low",
         "failure_category": "environmental",
-        "tags": ["temperature", "weather", "external_cause", "false_positive", "seasonal"]
+        "tags": ["temperature", "weather", "external_cause", "false_positive", "seasonal"],
     },
     {
         "filename": "007_cpu_cryptominer_compromise.json",
@@ -41,11 +41,11 @@ INCIDENTS = [
             "Apply security patches for all known vulnerabilities before reconnecting",
             "Audit all devices of the same type for similar indicators of compromise",
             "Implement network segmentation to limit lateral movement",
-            "Add outbound connection monitoring rules for non-standard ports"
+            "Add outbound connection monitoring rules for non-standard ports",
         ],
         "severity": "critical",
         "failure_category": "security_incident",
-        "tags": ["cpu_usage", "security", "cryptominer", "single_device", "network_anomaly"]
+        "tags": ["cpu_usage", "security", "cryptominer", "single_device", "network_anomaly"],
     },
     {
         "filename": "008_humidity_sensor_end_of_life.json",
@@ -59,11 +59,11 @@ INCIDENTS = [
             "Replace the sensor with a new unit of the same model",
             "Calibrate the replacement sensor against a reference standard",
             "Update device registry with new sensor serial number and installation date",
-            "Implement proactive replacement schedule based on manufacturer's rated lifespan minus 20% safety margin"
+            "Implement proactive replacement schedule based on manufacturer's rated lifespan minus 20% safety margin",
         ],
         "severity": "medium",
         "failure_category": "hardware_degradation",
-        "tags": ["humidity", "end_of_life", "degradation", "single_device", "erratic_readings"]
+        "tags": ["humidity", "end_of_life", "degradation", "single_device", "erratic_readings"],
     },
     {
         "filename": "009_pressure_rapid_drop_door_event.json",
@@ -78,11 +78,11 @@ INCIDENTS = [
             "Verify interlock prevents simultaneous door opening after repair",
             "Review pressure recovery time to confirm HVAC system is adequately sized",
             "Add secondary door position verification (optical sensor backup)",
-            "Test interlock mechanism under various door positions to confirm reliable detection"
+            "Test interlock mechanism under various door positions to confirm reliable detection",
         ],
         "severity": "critical",
         "failure_category": "mechanical_failure",
-        "tags": ["pressure", "cleanroom", "door_malfunction", "rapid_change", "contamination_risk"]
+        "tags": ["pressure", "cleanroom", "door_malfunction", "rapid_change", "contamination_risk"],
     },
     {
         "filename": "010_temperature_network_delay_batch.json",
@@ -96,11 +96,18 @@ INCIDENTS = [
             "Review actual reading values in context of their original timestamps rather than delivery time",
             "If readings represent a real event, investigate the localized heat source active during that period",
             "Configure anomaly detection to account for batch-delivered readings (detect and flag network recovery patterns)",
-            "Consider implementing delivery-time vs measurement-time distinction in the ingestion pipeline"
+            "Consider implementing delivery-time vs measurement-time distinction in the ingestion pipeline",
         ],
         "severity": "low",
         "failure_category": "network_connectivity",
-        "tags": ["temperature", "network", "buffering", "batch_delivery", "false_positive", "wireless"]
+        "tags": [
+            "temperature",
+            "network",
+            "buffering",
+            "batch_delivery",
+            "false_positive",
+            "wireless",
+        ],
     },
     {
         "filename": "011_cpu_firmware_update_spike.json",
@@ -114,11 +121,17 @@ INCIDENTS = [
             "If any devices show sustained high CPU after update window, investigate failed update requiring retry",
             "Add suppression rule for CPU alerts during scheduled OTA update windows",
             "Document expected CPU impact of firmware updates for operator awareness",
-            "Consider scheduling OTA updates during low-activity periods to minimize alert noise"
+            "Consider scheduling OTA updates during low-activity periods to minimize alert noise",
         ],
         "severity": "low",
         "failure_category": "scheduled_maintenance",
-        "tags": ["cpu_usage", "firmware_update", "expected_behavior", "multi_device", "rolling_pattern"]
+        "tags": [
+            "cpu_usage",
+            "firmware_update",
+            "expected_behavior",
+            "multi_device",
+            "rolling_pattern",
+        ],
     },
     {
         "filename": "012_temperature_direct_sunlight.json",
@@ -132,11 +145,11 @@ INCIDENTS = [
             "If immediate shielding is unavailable, relocate sensor to a north-facing shaded position",
             "Apply a correction factor to readings during affected hours as a temporary measure",
             "Update installation guidelines to require solar shielding assessment for all outdoor sensor placements",
-            "Validate correction by comparing shielded readings against a reference sensor"
+            "Validate correction by comparing shielded readings against a reference sensor",
         ],
         "severity": "low",
         "failure_category": "installation_error",
-        "tags": ["temperature", "solar_loading", "installation", "time_pattern", "outdoor"]
+        "tags": ["temperature", "solar_loading", "installation", "time_pattern", "outdoor"],
     },
     {
         "filename": "013_humidity_water_ingress.json",
@@ -151,11 +164,11 @@ INCIDENTS = [
             "Test sensor after drying; replace if readings do not return to accurate values",
             "Apply conformal coating to PCB if water contact is suspected",
             "Audit all sensors in chemical-exposure areas for seal integrity",
-            "Upgrade to IP67-rated housings in areas where cleaning chemicals are used"
+            "Upgrade to IP67-rated housings in areas where cleaning chemicals are used",
         ],
         "severity": "medium",
         "failure_category": "hardware_degradation",
-        "tags": ["humidity", "water_ingress", "seal_failure", "stuck_reading", "single_device"]
+        "tags": ["humidity", "water_ingress", "seal_failure", "stuck_reading", "single_device"],
     },
     {
         "filename": "014_cpu_dos_attack_pattern.json",
@@ -170,11 +183,18 @@ INCIDENTS = [
             "Add the IoT subnet to the vulnerability scanner's exclusion list or reduce scan intensity",
             "Configure network-level rate limiting on the switch/firewall for the IoT VLAN",
             "Implement connection timeout limits on device management interfaces",
-            "Schedule any required vulnerability scans during maintenance windows with reduced intensity settings"
+            "Schedule any required vulnerability scans during maintenance windows with reduced intensity settings",
         ],
         "severity": "high",
         "failure_category": "network_overload",
-        "tags": ["cpu_usage", "network", "dos", "vulnerability_scan", "multi_device", "simultaneous"]
+        "tags": [
+            "cpu_usage",
+            "network",
+            "dos",
+            "vulnerability_scan",
+            "multi_device",
+            "simultaneous",
+        ],
     },
     {
         "filename": "015_pressure_altitude_compensation_error.json",
@@ -188,11 +208,18 @@ INCIDENTS = [
             "Update the device's altitude compensation setting to reflect new installation height",
             "Verify corrected readings against a calibrated reference barometer at the same location",
             "Update the device registry with new location and elevation metadata",
-            "Add altitude compensation verification to the sensor relocation checklist"
+            "Add altitude compensation verification to the sensor relocation checklist",
         ],
         "severity": "low",
         "failure_category": "configuration_error",
-        "tags": ["pressure", "calibration", "relocation", "altitude", "constant_offset", "configuration"]
+        "tags": [
+            "pressure",
+            "calibration",
+            "relocation",
+            "altitude",
+            "constant_offset",
+            "configuration",
+        ],
     },
     {
         "filename": "016_temperature_thermal_coupling_adjacent_equipment.json",
@@ -206,11 +233,17 @@ INCIDENTS = [
             "If relocation is impractical, install a radiation shield between the sensor and heat source",
             "Alternatively, add a second sensor in a thermally neutral position and use the average",
             "Update baseline expectations if the sensor must remain in its current position",
-            "Document minimum distance requirements between temperature sensors and heat-generating equipment"
+            "Document minimum distance requirements between temperature sensors and heat-generating equipment",
         ],
         "severity": "low",
         "failure_category": "installation_error",
-        "tags": ["temperature", "thermal_coupling", "equipment_change", "workload_correlation", "installation"]
+        "tags": [
+            "temperature",
+            "thermal_coupling",
+            "equipment_change",
+            "workload_correlation",
+            "installation",
+        ],
     },
     {
         "filename": "017_multi_sensor_power_supply_noise.json",
@@ -224,11 +257,11 @@ INCIDENTS = [
             "If battery specs are correct, add a linear voltage regulator between UPS output and sensor power rail",
             "Alternatively, add additional capacitance (electrolytic + ceramic) at the sensor power input",
             "Test replacement with the correct battery specification if available",
-            "Add power quality monitoring to critical sensor power circuits"
+            "Add power quality monitoring to critical sensor power circuits",
         ],
         "severity": "medium",
         "failure_category": "power_quality",
-        "tags": ["multi_sensor", "power_supply", "oscillation", "correlated", "ups", "noise"]
+        "tags": ["multi_sensor", "power_supply", "oscillation", "correlated", "ups", "noise"],
     },
     {
         "filename": "018_cpu_garbage_collection_spikes.json",
@@ -242,11 +275,18 @@ INCIDENTS = [
             "Reduce heap size if possible to decrease individual GC duration",
             "Increase GC frequency with smaller generations to prevent large full-GC pauses",
             "Consider migrating the telemetry agent to a non-GC language for embedded deployments",
-            "If pattern is acceptable, add suppression rule to ignore CPU spikes under 10 seconds duration"
+            "If pattern is acceptable, add suppression rule to ignore CPU spikes under 10 seconds duration",
         ],
         "severity": "low",
         "failure_category": "software_configuration",
-        "tags": ["cpu_usage", "garbage_collection", "java", "periodic", "expected_behavior", "configuration"]
+        "tags": [
+            "cpu_usage",
+            "garbage_collection",
+            "java",
+            "periodic",
+            "expected_behavior",
+            "configuration",
+        ],
     },
     {
         "filename": "019_temperature_sensor_wire_fault.json",
@@ -261,11 +301,18 @@ INCIDENTS = [
             "Re-terminate or replace the thermocouple wire as needed",
             "Apply dielectric grease to terminal connections to prevent future corrosion",
             "Seal junction box against moisture ingress",
-            "Configure alerting to recognize fixed min/max value readings as sensor fault patterns"
+            "Configure alerting to recognize fixed min/max value readings as sensor fault patterns",
         ],
         "severity": "high",
         "failure_category": "wiring_fault",
-        "tags": ["temperature", "thermocouple", "open_circuit", "fixed_value", "wiring", "corrosion"]
+        "tags": [
+            "temperature",
+            "thermocouple",
+            "open_circuit",
+            "fixed_value",
+            "wiring",
+            "corrosion",
+        ],
     },
     {
         "filename": "020_humidity_rapid_cycling.json",
@@ -279,11 +326,11 @@ INCIDENTS = [
             "If power cycling resolves, monitor for recurrence (indicates marginal solder joint)",
             "If persistent after power cycle, replace the sensor unit",
             "Log the failure mode for future pattern recognition (two alternating fixed values = ADC bit fault)",
-            "Consider implementing a reading validation rule that flags constant alternating-value patterns"
+            "Consider implementing a reading validation rule that flags constant alternating-value patterns",
         ],
         "severity": "medium",
         "failure_category": "hardware_failure",
-        "tags": ["humidity", "adc_failure", "stuck_bit", "alternating_values", "hardware"]
+        "tags": ["humidity", "adc_failure", "stuck_bit", "alternating_values", "hardware"],
     },
     {
         "filename": "021_temperature_cascade_cooling_failure.json",
@@ -298,11 +345,19 @@ INCIDENTS = [
             "Verify secondary chiller auto-start sequence is configured with acceptable delay",
             "Reduce secondary chiller start delay from 18 minutes to under 5 minutes",
             "Monitor all equipment temperatures during recovery to identify any thermal damage",
-            "Conduct post-incident review of cooling redundancy adequacy"
+            "Conduct post-incident review of cooling redundancy adequacy",
         ],
         "severity": "critical",
         "failure_category": "cooling_system_failure",
-        "tags": ["temperature", "humidity", "cooling", "cascade", "multi_device", "data_center", "critical_infrastructure"]
+        "tags": [
+            "temperature",
+            "humidity",
+            "cooling",
+            "cascade",
+            "multi_device",
+            "data_center",
+            "critical_infrastructure",
+        ],
     },
     {
         "filename": "022_pressure_transient_compressor_startup.json",
@@ -316,11 +371,11 @@ INCIDENTS = [
             "Alternatively, apply a moving average or low-pass filter to pressure readings to smooth transients",
             "Document expected transient characteristics for operator training",
             "If transients exceed 15% magnitude, investigate ductwork sizing or damper configuration",
-            "Consider reducing sensor sampling rate if sub-second transients are not operationally relevant"
+            "Consider reducing sensor sampling rate if sub-second transients are not operationally relevant",
         ],
         "severity": "low",
         "failure_category": "expected_behavior",
-        "tags": ["pressure", "transient", "hvac", "compressor", "false_positive", "brief_duration"]
+        "tags": ["pressure", "transient", "hvac", "compressor", "false_positive", "brief_duration"],
     },
     {
         "filename": "023_cpu_telemetry_backlog_processing.json",
@@ -334,11 +389,11 @@ INCIDENTS = [
             "Add exponential backoff between backlog batches to prevent sustained CPU saturation",
             "Configure backlog processing to run at reduced priority (nice level) to preserve headroom for real-time operations",
             "Add telemetry age metadata so downstream systems can identify and appropriately handle delayed readings",
-            "Implement a maximum backlog size with oldest-first eviction to prevent unbounded growth during extended outages"
+            "Implement a maximum backlog size with oldest-first eviction to prevent unbounded growth during extended outages",
         ],
         "severity": "medium",
         "failure_category": "network_recovery",
-        "tags": ["cpu_usage", "network", "backlog", "store_and_forward", "burst", "recovery"]
+        "tags": ["cpu_usage", "network", "backlog", "store_and_forward", "burst", "recovery"],
     },
     {
         "filename": "024_temperature_emi_interference.json",
@@ -352,17 +407,22 @@ INCIDENTS = [
             "Route sensor cable at least 30cm away from VFD power cables, crossing at 90° angles only",
             "Install a ferrite choke on the sensor cable near the measurement terminal",
             "If wiring changes are impractical, add a hardware low-pass filter at the sensor input",
-            "Apply digital filtering (moving average of last 5 readings) in firmware as a software mitigation"
+            "Apply digital filtering (moving average of last 5 readings) in firmware as a software mitigation",
         ],
         "severity": "medium",
         "failure_category": "electromagnetic_interference",
-        "tags": ["temperature", "emi", "vfd", "noise", "industrial", "wiring"]
+        "tags": ["temperature", "emi", "vfd", "noise", "industrial", "wiring"],
     },
     {
         "filename": "025_multi_sensor_time_sync_drift.json",
         "title": "Apparent multi-device anomaly caused by NTP time synchronization failure",
         "description": "Multiple sensors appeared to simultaneously report anomalous values when viewed on the monitoring dashboard. However, investigation revealed the readings themselves were normal — the apparent anomaly was caused by events from different time periods being displayed together due to incorrect timestamps. Devices had drifted up to 5 minutes from actual time.",
-        "affected_device_types": ["temperature_sensor", "humidity_sensor", "pressure_sensor", "edge_gateway"],
+        "affected_device_types": [
+            "temperature_sensor",
+            "humidity_sensor",
+            "pressure_sensor",
+            "edge_gateway",
+        ],
         "root_cause": "The NTP server used by the IoT device fleet became unreachable due to a firewall rule change. Without time synchronization, device clocks drifted at their individual crystal oscillator rates (typically ±20 ppm, or ~1.7 seconds per day). After several days, the cumulative drift caused time-series data to be misaligned when displayed on dashboards that assume synchronized timestamps.",
         "resolution_steps": [
             "Verify NTP server accessibility from the device network segment",
@@ -371,11 +431,11 @@ INCIDENTS = [
             "Implement NTP reachability monitoring with alerting on loss of sync",
             "Configure devices to report their sync status and estimated clock accuracy",
             "Add a secondary NTP source for redundancy",
-            "Consider marking telemetry data with a clock-quality indicator for downstream processing"
+            "Consider marking telemetry data with a clock-quality indicator for downstream processing",
         ],
         "severity": "medium",
         "failure_category": "time_synchronization",
-        "tags": ["multi_sensor", "ntp", "time_drift", "false_positive", "infrastructure"]
+        "tags": ["multi_sensor", "ntp", "time_drift", "false_positive", "infrastructure"],
     },
     {
         "filename": "026_temperature_self_heating.json",
@@ -389,11 +449,11 @@ INCIDENTS = [
             "If high-frequency measurement is required, reduce excitation current (may reduce measurement resolution)",
             "Apply a self-heating correction factor based on the manufacturer's specified thermal resistance",
             "Consider using a sensor with lower self-heating specification (e.g., thin-film RTD vs wire-wound)",
-            "Document maximum recommended measurement frequency for each sensor type in deployment guidelines"
+            "Document maximum recommended measurement frequency for each sensor type in deployment guidelines",
         ],
         "severity": "low",
         "failure_category": "configuration_error",
-        "tags": ["temperature", "self_heating", "configuration", "measurement_frequency", "offset"]
+        "tags": ["temperature", "self_heating", "configuration", "measurement_frequency", "offset"],
     },
     {
         "filename": "027_cpu_log_rotation_spike.json",
@@ -407,11 +467,18 @@ INCIDENTS = [
             "Change compression algorithm from gzip to lz4 (faster with acceptable compression ratio)",
             "Schedule log rotation during a known low-activity period for the specific deployment",
             "Implement log size limits to cap the maximum file size requiring compression",
-            "Add this known pattern to runbook documentation so operators can recognize it without investigation"
+            "Add this known pattern to runbook documentation so operators can recognize it without investigation",
         ],
         "severity": "low",
         "failure_category": "scheduled_maintenance",
-        "tags": ["cpu_usage", "log_rotation", "cron", "periodic", "predictable", "expected_behavior"]
+        "tags": [
+            "cpu_usage",
+            "log_rotation",
+            "cron",
+            "periodic",
+            "predictable",
+            "expected_behavior",
+        ],
     },
     {
         "filename": "028_humidity_hvac_hunting.json",
@@ -425,11 +492,19 @@ INCIDENTS = [
             "Increase integral time constant (Ti) to reduce overshoot tendency",
             "If available, enable proportional dehumidification control instead of binary mode",
             "After PID adjustment, monitor for 24 hours to confirm oscillation amplitude decreases",
-            "If auto-tuning is available on the HVAC controller, initiate it during stable ambient conditions"
+            "If auto-tuning is available on the HVAC controller, initiate it during stable ambient conditions",
         ],
         "severity": "medium",
         "failure_category": "control_system",
-        "tags": ["humidity", "temperature", "hvac", "oscillation", "pid_tuning", "hunting", "control_loop"]
+        "tags": [
+            "humidity",
+            "temperature",
+            "hvac",
+            "oscillation",
+            "pid_tuning",
+            "hunting",
+            "control_loop",
+        ],
     },
     {
         "filename": "029_pressure_leak_gradual.json",
@@ -444,11 +519,11 @@ INCIDENTS = [
             "Tighten or replace the leaking fitting with appropriate thread sealant",
             "Re-pressurize system and verify leak rate drops to zero (hold test for 24 hours)",
             "Implement trending alert: notify maintenance when pressure drops more than 2% from last fill within 48 hours",
-            "Schedule regular fitting torque checks as part of preventive maintenance"
+            "Schedule regular fitting torque checks as part of preventive maintenance",
         ],
         "severity": "high",
         "failure_category": "mechanical_degradation",
-        "tags": ["pressure", "leak", "gradual", "trending", "maintenance_required", "pneumatic"]
+        "tags": ["pressure", "leak", "gradual", "trending", "maintenance_required", "pneumatic"],
     },
     {
         "filename": "030_temperature_intermittent_connection.json",
@@ -463,13 +538,21 @@ INCIDENTS = [
             "If connector shows wear or corrosion, replace with new mating pair",
             "Apply vibration-resistant locking mechanism (connector retaining clip or thread lock)",
             "Verify fix by monitoring for 48 hours under normal vibration conditions",
-            "Implement spike detection rule: flag readings that deviate significantly for exactly one sample then return to baseline"
+            "Implement spike detection rule: flag readings that deviate significantly for exactly one sample then return to baseline",
         ],
         "severity": "medium",
         "failure_category": "wiring_fault",
-        "tags": ["temperature", "intermittent", "connector", "vibration", "contact_resistance", "spike"]
+        "tags": [
+            "temperature",
+            "intermittent",
+            "connector",
+            "vibration",
+            "contact_resistance",
+            "spike",
+        ],
     },
 ]
+
 
 def main():
     output_dir = "data/incidents"
@@ -489,4 +572,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

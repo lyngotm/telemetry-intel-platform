@@ -48,7 +48,6 @@ class TestComputeZScore:
         assert compute_z_score(100.0, stats) == 0.0
 
 
-
 class TestClassifySeverity:
     """Tests for the severity classification function."""
 
@@ -79,5 +78,6 @@ class TestClassifySeverity:
 
     def test_uses_absolute_value(self):
         """Negative z-scores are classified by their absolute value."""
-        assert classify_severity(-settings.z_score_threshold_high) == classify_severity(settings.z_score_threshold_high)
-
+        assert classify_severity(-settings.z_score_threshold_high) == classify_severity(
+            settings.z_score_threshold_high
+        )

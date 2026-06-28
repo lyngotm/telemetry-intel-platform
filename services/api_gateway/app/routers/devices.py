@@ -66,7 +66,9 @@ async def register_device(
             device_type=row["device_type"],
             location=row["location"],
             firmware_version=row["firmware_version"],
-            metadata=json.loads(row["metadata"]) if isinstance(row["metadata"], str) else row["metadata"],
+            metadata=json.loads(row["metadata"])
+            if isinstance(row["metadata"], str)
+            else row["metadata"],
             registered_at=row["registered_at"],
             updated_at=row["updated_at"],
         ),
@@ -103,7 +105,9 @@ async def list_devices(
             device_type=row["device_type"],
             location=row["location"],
             firmware_version=row["firmware_version"],
-            metadata=json.loads(row["metadata"]) if isinstance(row["metadata"], str) else row["metadata"],
+            metadata=json.loads(row["metadata"])
+            if isinstance(row["metadata"], str)
+            else row["metadata"],
             registered_at=row["registered_at"],
             updated_at=row["updated_at"],
         )
