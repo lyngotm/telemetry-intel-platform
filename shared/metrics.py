@@ -84,6 +84,7 @@ DIAGNOSIS_GENERATION_SECONDS = Histogram(
 
 # ─── Prometheus Middleware (API Gateway only) ─────────────────────
 
+
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """Records request count and latency for all HTTP endpoints."""
 
@@ -112,10 +113,10 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
 # ─── /metrics response helper ─────────────────────────────────────
 
+
 def metrics_response() -> Response:
     """Generate Prometheus text-format metrics response."""
     return Response(
         content=generate_latest(REGISTRY),
         media_type=CONTENT_TYPE_LATEST,
     )
-

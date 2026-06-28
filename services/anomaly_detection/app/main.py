@@ -22,7 +22,8 @@ logging.basicConfig(
 )
 # Only set DEBUG for our code
 logging.getLogger("anomaly_detection").setLevel(
-    getattr(logging, settings.log_level.upper(), logging.INFO))
+    getattr(logging, settings.log_level.upper(), logging.INFO)
+)
 
 logger = logging.getLogger("anomaly_detection")
 

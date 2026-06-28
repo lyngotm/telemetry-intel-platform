@@ -16,6 +16,7 @@ from shared.models.models import UserPayload
 
 # --- Load RSA keys at module level (once on import) ---
 
+
 def _load_key(path: str) -> str:
     """Read a PEM key file from disk."""
     with open(path, "r") as f:
@@ -109,4 +110,3 @@ async def get_current_user(
         )
 
     return decode_token(credentials.credentials)
-

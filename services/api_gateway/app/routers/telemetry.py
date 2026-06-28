@@ -200,7 +200,9 @@ async def query_telemetry(
             metric_type=row["metric_type"],
             value=row["value"],
             timestamp=row["timestamp"],
-            metadata=json.loads(row["metadata"]) if isinstance(row["metadata"], str) else row["metadata"],
+            metadata=json.loads(row["metadata"])
+            if isinstance(row["metadata"], str)
+            else row["metadata"],
             ingested_at=row["ingested_at"],
         )
         for row in rows
@@ -240,3 +242,54 @@ def _build_cache_key(
     return f"cache:telemetry:{query_hash}"
 
 
+@router.get(
+    "/dlq",
+    response_model=APIListResponse,
+)
+async def query_dead_letter_queue(
+    limit: int = 100,
+    offset: int = 0,
+    conn: asyncpg.Connection = Depends(get_db_connection),
+    current_user: UserPayload = Depends(require_role("operator")),
+    _rate_limit: None = Depends(require_rate_limit("query")),
+):
+    """
+    Query dead-letter queue events (failed validation messages).
+
+    Returns messages that failed ingestion pipeline validation, including
+    the original payload and the reason for failure. Useful for debugging
+    malformed telemetry and identifying misbehaving devices.
+
+    Requires operator role or above.
+    """
+    limit = min(limit, 1000)
+
+    rows = await conn.fetch(
+        """
+        SELECT id, original_topic, original_payload, error_reason, failed_at
+        FROM dead_letter_events
+        ORDER BY failed_at DESC
+        LIMIT $1 OFFSET $2
+        """,
+        limit,
+        offset,
+    )
+
+    total = await conn.fetchval("SELECT COUNT(*) FROM dead_letter_events")
+
+    events = [
+        {
+            "id": str(row["id"]),
+            "original_topic": row["original_topic"],
+            "original_payload": row["original_payload"],
+            "error_reason": row["error_reason"],
+            "failed_at": row["failed_at"].isoformat(),
+        }
+        for row in rows
+    ]
+
+    return APIListResponse(
+        success=True,
+        data=events,
+        count=total,
+    )

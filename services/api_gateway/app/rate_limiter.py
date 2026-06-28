@@ -124,4 +124,3 @@ def require_rate_limit(endpoint_name: str, max_requests: int | None = None):
             logger.warning(f"Rate limiter Redis error (failing open): {e}")
 
     return _rate_limit_checker
-

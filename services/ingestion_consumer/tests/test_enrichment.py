@@ -96,9 +96,7 @@ class TestDeviceEnrichment:
             },
         )
         # TTL was set
-        mock_redis.expire.assert_called_once_with(
-            f"device:{device_id}", DEVICE_CACHE_TTL_SECONDS
-        )
+        mock_redis.expire.assert_called_once_with(f"device:{device_id}", DEVICE_CACHE_TTL_SECONDS)
 
     async def test_device_not_found_returns_none(self, mock_redis):
         """When device doesn't exist in Redis or PostgreSQL, return None."""

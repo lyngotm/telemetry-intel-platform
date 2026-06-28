@@ -81,7 +81,9 @@ def main():
             print(f"  [{i:02d}/{len(files)}] ✓ {filename} → {chunks} chunk(s)")
         except httpx.HTTPStatusError as e:
             fail_count += 1
-            print(f"  [{i:02d}/{len(files)}] ✗ {filename} → {e.response.status_code}: {e.response.text}")
+            print(
+                f"  [{i:02d}/{len(files)}] ✗ {filename} → {e.response.status_code}: {e.response.text}"
+            )
         except Exception as e:
             fail_count += 1
             print(f"  [{i:02d}/{len(files)}] ✗ {filename} → {e}")

@@ -8,7 +8,7 @@ Run with:
 
 import asyncio
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import asyncpg
@@ -72,8 +72,23 @@ class TestAnomalyDetection:
         """
         # --- Step 1: Send 15 normal readings to build the rolling window ---
         # Mean=65, stddev≈5 — these values will establish the baseline
-        normal_values = [64.2, 65.8, 63.9, 66.1, 64.7, 65.3, 66.5, 63.8,
-                         65.0, 64.5, 66.2, 65.1, 64.8, 65.7, 63.5]
+        normal_values = [
+            64.2,
+            65.8,
+            63.9,
+            66.1,
+            64.7,
+            65.3,
+            66.5,
+            63.8,
+            65.0,
+            64.5,
+            66.2,
+            65.1,
+            64.8,
+            65.7,
+            63.5,
+        ]
 
         base_time = datetime.now(timezone.utc)
 
@@ -156,7 +171,9 @@ class TestAnomalyDetection:
             registered_device,
             "temperature",
             99.0,
-            json.dumps({"mean": 65.0, "stddev": 1.0, "lower": 60.0, "upper": 70.0, "window_count": 15}),
+            json.dumps(
+                {"mean": 65.0, "stddev": 1.0, "lower": 60.0, "upper": 70.0, "window_count": 15}
+            ),
             34.0,
             "critical",
         )

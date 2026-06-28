@@ -32,7 +32,7 @@ async def get_redis_client(request: Request) -> aioredis.Redis:
     """Returns the shared Redis client."""
     return request.app.state.redis_client
 
+
 def get_chroma_client(request: Request) -> chromadb.ClientAPI:
     """Returns the shared ChromaDB client."""
     return request.app.state.chroma_client
-

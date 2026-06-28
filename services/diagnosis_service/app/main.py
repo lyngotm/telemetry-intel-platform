@@ -223,5 +223,3 @@ async def process_anomaly_message(
 
 if __name__ == "__main__":
     asyncio.run(run_consumer())
-
-    

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 # DEVICE MODELS
 # ============================================================
 
+
 class DeviceCreate(BaseModel):
     """Request body for registering a new device."""
 
@@ -94,6 +95,7 @@ class TelemetryEventResponse(BaseModel):
 # KAFKA MESSAGE MODELS
 # ============================================================
 
+
 class TelemetryRawMessage(BaseModel):
     """
     Schema for messages on the telemetry.raw Kafka topic.
@@ -150,8 +152,10 @@ class AnomalyDetectedMessage(BaseModel):
 # API RESPONSE ENVELOPE
 # ============================================================
 
+
 class APIResponse(BaseModel):
     """Envelope for single-resource responses."""
+
     success: bool
     message: str | None = None
     data: Any = None
@@ -159,10 +163,12 @@ class APIResponse(BaseModel):
 
 class APIListResponse(BaseModel):
     """Envelope for list responses."""
+
     success: bool
     message: str | None = None
     data: list[Any] = []
     count: int = 0
+
 
 class AnomalyResponse(BaseModel):
     """Anomaly record as returned by the API."""
@@ -177,11 +183,12 @@ class AnomalyResponse(BaseModel):
     detected_at: datetime
     status: str
     created_at: datetime
-    
+
 
 # ============================================================
 # AUTH MODELS
 # ============================================================
+
 
 class UserPayload(BaseModel):
     """
@@ -211,13 +218,38 @@ class TokenResponse(BaseModel):
 class IncidentCreate(BaseModel):
     """Request body for POST /api/v1/knowledge/ingest — a single incident document."""
 
-    title: str = Field(..., min_length=1, max_length=500, examples=["Thermal runaway on edge gateway devices"])
-    description: str = Field(..., min_length=10, examples=["Multiple edge gateway devices reported sustained temperature readings above 85°C..."])
-    affected_device_types: list[str] = Field(..., min_length=1, examples=[["temperature_sensor", "edge_gateway"]])
-    root_cause: str = Field(..., min_length=10, examples=["Fan assembly failure combined with ambient temperature spike..."])
-    resolution_steps: list[str] = Field(..., min_length=1, examples=[["Verify fan assembly RPM via firmware diagnostics", "Replace thermal paste if degraded"]])
+    title: str = Field(
+        ..., min_length=1, max_length=500, examples=["Thermal runaway on edge gateway devices"]
+    )
+    description: str = Field(
+        ...,
+        min_length=10,
+        examples=[
+            "Multiple edge gateway devices reported sustained temperature readings above 85°C..."
+        ],
+    )
+    affected_device_types: list[str] = Field(
+        ..., min_length=1, examples=[["temperature_sensor", "edge_gateway"]]
+    )
+    root_cause: str = Field(
+        ...,
+        min_length=10,
+        examples=["Fan assembly failure combined with ambient temperature spike..."],
+    )
+    resolution_steps: list[str] = Field(
+        ...,
+        min_length=1,
+        examples=[
+            [
+                "Verify fan assembly RPM via firmware diagnostics",
+                "Replace thermal paste if degraded",
+            ]
+        ],
+    )
     severity: str = Field(..., pattern="^(low|medium|high|critical)$", examples=["high"])
-    failure_category: str = Field(..., min_length=1, max_length=100, examples=["thermal_management"])
+    failure_category: str = Field(
+        ..., min_length=1, max_length=100, examples=["thermal_management"]
+    )
     tags: list[str] = Field(default_factory=list, examples=[["thermal", "hardware", "fan_failure"]])
 
 
@@ -259,6 +291,3 @@ class DiagnosisResponse(BaseModel):
     model_id: str | None = None
     generation_time_seconds: float | None = None
     generated_at: datetime
-
-
-

@@ -11,7 +11,6 @@ Redis key format: device:{device_id}
 Redis data structure: Hash (HSET/HGETALL)
 """
 
-import json
 import logging
 from uuid import UUID
 
@@ -61,7 +60,9 @@ class DeviceEnrichment:
         try:
             await self.redis.hset(cache_key, mapping=metadata)
             await self.redis.expire(cache_key, DEVICE_CACHE_TTL_SECONDS)
-            logger.debug(f"Cached device metadata for {cache_key} (TTL: {DEVICE_CACHE_TTL_SECONDS}s)")
+            logger.debug(
+                f"Cached device metadata for {cache_key} (TTL: {DEVICE_CACHE_TTL_SECONDS}s)"
+            )
         except Exception as e:
             logger.warning(f"Failed to cache device metadata for {cache_key}: {e}")
 
@@ -100,5 +101,3 @@ class DeviceEnrichment:
             "location": cached.get("location", ""),
             "firmware_version": cached.get("firmware_version", ""),
         }
-    
-    

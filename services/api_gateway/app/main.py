@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
         host=settings.chroma_host,
         port=settings.chroma_port,
     )
-    
+
     app.state.chroma_client.get_or_create_collection(
         name="incident_embeddings",
         metadata={"hnsw:space": "cosine"},
@@ -107,6 +107,7 @@ async def readiness_check():
     except Exception as e:
         logger.warning(f"Readiness check failed: {e}")
         from fastapi.responses import JSONResponse
+
         return JSONResponse(
             status_code=503,
             content={"status": "not_ready", "detail": str(e)},

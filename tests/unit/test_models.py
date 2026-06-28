@@ -20,6 +20,7 @@ from shared.models.models import (
 # DeviceCreate Tests
 # ============================================================
 
+
 class TestDeviceCreate:
     """Tests for the DeviceCreate model."""
 
@@ -67,6 +68,7 @@ class TestDeviceCreate:
 # ============================================================
 # TelemetryEventCreate Tests
 # ============================================================
+
 
 class TestTelemetryEventCreate:
     """Tests for the TelemetryEventCreate model."""
@@ -191,6 +193,7 @@ class TestTelemetryEventCreate:
 # TelemetryRawMessage Tests
 # ============================================================
 
+
 class TestTelemetryRawMessage:
     """Tests for Kafka message deserialization."""
 
@@ -215,6 +218,7 @@ class TestTelemetryRawMessage:
 # ============================================================
 # TelemetryEnrichedMessage Tests
 # ============================================================
+
 
 class TestTelemetryEnrichedMessage:
     """Tests for the enriched message model (Week 1: enrichment fields are None)."""

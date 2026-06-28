@@ -70,7 +70,11 @@ class TestCacheAside:
         self, api_client: httpx.AsyncClient, redis_client: aioredis.Redis
     ):
         """First request for a query should miss the cache and populate it."""
-        params = {"metric_type": "temperature", "limit": 5, "start": datetime.now(timezone.utc).isoformat()}
+        params = {
+            "metric_type": "temperature",
+            "limit": 5,
+            "start": datetime.now(timezone.utc).isoformat(),
+        }
         expected_key = _compute_cache_key(params)
 
         # Verify key does NOT exist before the request
@@ -86,10 +90,17 @@ class TestCacheAside:
         assert exists_after == 1, "Cache key was not created after request"
 
     async def test_second_request_is_cache_hit(
-        self, api_client: httpx.AsyncClient, redis_client: aioredis.Redis, db_connection: asyncpg.Connection
+        self,
+        api_client: httpx.AsyncClient,
+        redis_client: aioredis.Redis,
+        db_connection: asyncpg.Connection,
     ):
         """Prove the second request is served from cache by deleting the DB data between requests."""
-        params = {"metric_type": "pressure", "limit": 3, "start": datetime.now(timezone.utc).isoformat()}
+        params = {
+            "metric_type": "pressure",
+            "limit": 3,
+            "start": datetime.now(timezone.utc).isoformat(),
+        }
 
         # First request — populates cache
         response1 = await api_client.get("/api/v1/telemetry", params=params)
@@ -107,7 +118,11 @@ class TestCacheAside:
         self, api_client: httpx.AsyncClient, redis_client: aioredis.Redis
     ):
         """Cache keys should have a TTL of 60 seconds."""
-        params = {"metric_type": "humidity", "limit": 2, "start": datetime.now(timezone.utc).isoformat()}
+        params = {
+            "metric_type": "humidity",
+            "limit": 2,
+            "start": datetime.now(timezone.utc).isoformat(),
+        }
         expected_key = _compute_cache_key(params)
 
         await api_client.get("/api/v1/telemetry", params=params)
@@ -132,5 +147,3 @@ class TestCacheAside:
         assert await redis_client.exists(key_a) == 1
         assert await redis_client.exists(key_b) == 1
         assert key_a != key_b
-        
-        

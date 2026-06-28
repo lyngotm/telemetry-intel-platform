@@ -97,9 +97,9 @@ async def process_event(
     EVENTS_ANALYZED.inc()
 
     logger.info(
-    f"Z-SCORE CHECK: device={event.device_id}, metric={event.metric_type}, "
-    f"value={event.value}, z_score={z_score:.2f}, "
-    f"mean={stats.mean:.2f}, stddev={stats.stddev:.2f}, count={stats.count}"
+        f"Z-SCORE CHECK: device={event.device_id}, metric={event.metric_type}, "
+        f"value={event.value}, z_score={z_score:.2f}, "
+        f"mean={stats.mean:.2f}, stddev={stats.stddev:.2f}, count={stats.count}"
     )
     if severity is None:
         # Value is within normal range — no anomaly
@@ -175,4 +175,3 @@ async def process_event(
         )
     except Exception as e:
         logger.error(f"Failed to publish anomaly event: {e}", exc_info=True)
-

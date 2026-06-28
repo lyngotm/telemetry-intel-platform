@@ -38,13 +38,11 @@ text_splitter = RecursiveCharacterTextSplitter(
 def _prepare_incident_text(incident: IncidentCreate) -> str:
     """
     Combine incident fields into a single text document for chunking.
-    
+
     We concatenate the most semantically rich fields — this becomes
     the text that gets embedded and retrieved during diagnosis.
     """
-    resolution_text = "\n".join(
-        f"- {step}" for step in incident.resolution_steps
-    )
+    resolution_text = "\n".join(f"- {step}" for step in incident.resolution_steps)
 
     return (
         f"Incident: {incident.title}\n\n"
@@ -60,7 +58,7 @@ def _prepare_incident_text(incident: IncidentCreate) -> str:
 def _generate_embeddings(texts: list[str]) -> list[list[float]]:
     """
     Generate embeddings for a list of texts.
-    
+
     Uses AWS Bedrock (Cohere Embed v4) by default, or ChromaDB's built-in
     local model (all-MiniLM-L6-v2) when EMBEDDING_PROVIDER=local.
 
@@ -71,6 +69,7 @@ def _generate_embeddings(texts: list[str]) -> list[list[float]]:
     """
     if settings.embedding_provider == "local":
         from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+
         ef = DefaultEmbeddingFunction()
         return ef(texts)
 
@@ -80,10 +79,12 @@ def _generate_embeddings(texts: list[str]) -> list[list[float]]:
         modelId=settings.bedrock_embedding_model_id,
         contentType="application/json",
         accept="application/json",
-        body=json.dumps({
-            "texts": texts,
-            "input_type": "search_document",
-        }),
+        body=json.dumps(
+            {
+                "texts": texts,
+                "input_type": "search_document",
+            }
+        ),
     )
     response_body = json.loads(response["body"].read())
     return response_body["embeddings"]["float"]
@@ -95,9 +96,9 @@ def _generate_query_embedding(text: str) -> list[float]:
 
     Uses AWS Bedrock (Cohere Embed v4) by default, or ChromaDB's built-in
     local model (all-MiniLM-L6-v2) when EMBEDDING_PROVIDER=local.
-    
+
     Uses input_type="search_query" for optimal retrieval performance.
-    
+
     Cohere Embed v4 distinguishes between document and query embeddings:
     - search_document: used when indexing/storing content
     - search_query: used when searching for relevant content
@@ -105,6 +106,7 @@ def _generate_query_embedding(text: str) -> list[float]:
     """
     if settings.embedding_provider == "local":
         from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+
         ef = DefaultEmbeddingFunction()
         return ef([text])[0]
 
@@ -113,10 +115,12 @@ def _generate_query_embedding(text: str) -> list[float]:
         modelId=settings.bedrock_embedding_model_id,
         contentType="application/json",
         accept="application/json",
-        body=json.dumps({
-            "texts": [text],
-            "input_type": "search_query",
-        }),
+        body=json.dumps(
+            {
+                "texts": [text],
+                "input_type": "search_query",
+            }
+        ),
     )
     response_body = json.loads(response["body"].read())
     return response_body["embeddings"]["float"][0]
@@ -192,10 +196,10 @@ async def ingest_incident(
 ) -> tuple[UUID, int]:
     """
     Full ingestion pipeline for a single incident document.
-    
+
     Returns:
         Tuple of (incident_id, chunk_count)
-    
+
     Steps:
         1. Prepare text from incident fields
         2. Chunk the text

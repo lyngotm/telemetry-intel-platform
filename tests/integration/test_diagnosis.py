@@ -200,18 +200,18 @@ class TestDiagnosisPipeline:
         # (it should reference thermal/temperature/fan/cooling concepts)
         summary_lower = diagnosis["root_cause_summary"].lower()
         thermal_keywords = ["thermal", "temperature", "heat", "cooling", "fan", "spike"]
-        assert any(
-            keyword in summary_lower for keyword in thermal_keywords
-        ), f"Diagnosis doesn't appear thermal-related: {diagnosis['root_cause_summary']}"
+        assert any(keyword in summary_lower for keyword in thermal_keywords), (
+            f"Diagnosis doesn't appear thermal-related: {diagnosis['root_cause_summary']}"
+        )
 
-        print(f"\n{'='*60}")
-        print(f"DIAGNOSIS RECEIVED:")
+        print(f"\n{'=' * 60}")
+        print("DIAGNOSIS RECEIVED:")
         print(f"  Anomaly ID: {anomaly_id}")
         print(f"  Root Cause: {diagnosis['root_cause_summary'][:100]}...")
         print(f"  Confidence: {diagnosis['confidence_score']:.2f}")
         print(f"  Actions: {len(diagnosis['recommended_actions'])}")
         print(f"  Generation Time: {diagnosis.get('generation_time_seconds', 'N/A')}s")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
     async def test_diagnosis_pending_state(self, operator_client):
         """
@@ -230,6 +230,7 @@ class TestDiagnosisPipeline:
 
         # Use a fake anomaly ID to test 404
         import uuid
+
         fake_id = str(uuid.uuid4())
         response = await operator_client.get(
             f"/api/v1/anomalies/{fake_id}/diagnosis",

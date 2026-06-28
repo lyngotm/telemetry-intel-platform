@@ -193,9 +193,7 @@ class TestRBAC:
             "value": 25.0,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        response = client.post(
-            "/api/v1/telemetry", json=payload, headers=auth_header("viewer")
-        )
+        response = client.post("/api/v1/telemetry", json=payload, headers=auth_header("viewer"))
         assert response.status_code == 403
         assert "Insufficient permissions" in response.json()["detail"]
 
@@ -207,9 +205,7 @@ class TestRBAC:
             "location": "test-lab",
             "firmware_version": "1.0.0",
         }
-        response = client.post(
-            "/api/v1/devices", json=payload, headers=auth_header("viewer")
-        )
+        response = client.post("/api/v1/devices", json=payload, headers=auth_header("viewer"))
         assert response.status_code == 403
 
     def test_operator_can_post_telemetry(self, client: httpx.Client, auth_header):
@@ -220,9 +216,7 @@ class TestRBAC:
             "value": 25.0,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        response = client.post(
-            "/api/v1/telemetry", json=payload, headers=auth_header("operator")
-        )
+        response = client.post("/api/v1/telemetry", json=payload, headers=auth_header("operator"))
         # 202 if device exists, 404 if not — either proves auth passed
         assert response.status_code in (202, 404)
 
@@ -234,9 +228,7 @@ class TestRBAC:
             "location": "test-lab",
             "firmware_version": "1.0.0",
         }
-        response = client.post(
-            "/api/v1/devices", json=payload, headers=auth_header("operator")
-        )
+        response = client.post("/api/v1/devices", json=payload, headers=auth_header("operator"))
         assert response.status_code == 201
 
     def test_admin_has_full_access(self, client: httpx.Client, auth_header):
@@ -252,9 +244,7 @@ class TestRBAC:
             "location": "admin-test",
             "firmware_version": "2.0.0",
         }
-        response = client.post(
-            "/api/v1/devices", json=payload, headers=auth_header("admin")
-        )
+        response = client.post("/api/v1/devices", json=payload, headers=auth_header("admin"))
         assert response.status_code == 201
 
 
@@ -323,6 +313,7 @@ class TestResilience:
         """
         # First, verify Redis is actually unreachable
         import redis
+
         r = redis.Redis(host="localhost", port=6379, socket_connect_timeout=2)
         with pytest.raises(redis.ConnectionError):
             r.ping()
