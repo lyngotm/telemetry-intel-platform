@@ -168,7 +168,7 @@ class TestLoadPerformance:
         total_send_time = time.time() - start_time
         actual_rate = sent_count / total_send_time
 
-        print(f"\n  Send phase complete:")
+        print("\n  Send phase complete:")
         print(f"    Total sent (202): {sent_count}")
         print(f"    Rate limited (429): {rate_limited}")
         print(f"    Failed: {failed_sends}")
@@ -206,7 +206,7 @@ class TestLoadPerformance:
         accounted_for = new_events + new_dlq
 
         # --- Step 5: Report results ---
-        print(f"\n  Results:")
+        print("\n  Results:")
         print(f"    Events persisted: {new_events}")
         print(f"    DLQ entries: {new_dlq}")
         print(f"    Total accounted: {accounted_for}")
@@ -229,5 +229,5 @@ class TestLoadPerformance:
             f"Rate limited: {rate_limited}, Failed: {failed_sends}"
         )
 
-        print(f"\n  LOAD TEST PASSED ✓")
+        print("\n  LOAD TEST PASSED ✓")
         print(f"  System handles {actual_rate:.0f} events/sec with <1% drop rate")
