@@ -5,8 +5,8 @@ Sends 1000 events/second for 60 seconds → verifies no events dropped
 (count in PostgreSQL matches count sent minus DLQ count).
 
 Run with:
-    docker compose up -d postgres zookeeper kafka kafka-init redis chromadb
-    
+    docker compose up -d postgres zookeeper kafka kafka-init redis chromadb ngestion-consumer anomaly-detection
+
     # Start API Gateway with high rate limit
     PYTHONPATH=. RATE_LIMIT_INGESTION=100000 uv run uvicorn services.api_gateway.app.main:app --port 8000
 
@@ -87,15 +87,13 @@ class TestLoadPerformance:
 
         # --- Step 2: Record baseline counts ---
         async with db_pool.acquire() as conn:
-            baseline_events = await conn.fetchval(
-                "SELECT COUNT(*) FROM telemetry_events"
-            )
-            baseline_dlq = await conn.fetchval(
-                "SELECT COUNT(*) FROM dead_letter_events"
-            )
+            baseline_events = await conn.fetchval("SELECT COUNT(*) FROM telemetry_events")
+            baseline_dlq = await conn.fetchval("SELECT COUNT(*) FROM dead_letter_events")
 
         # --- Step 3: Send events at target rate ---
-        print(f"  Sending {TOTAL_EVENTS} events at {EVENTS_PER_SECOND}/sec for {DURATION_SECONDS}s...")
+        print(
+            f"  Sending {TOTAL_EVENTS} events at {EVENTS_PER_SECOND}/sec for {DURATION_SECONDS}s..."
+        )
         metric_types = ["temperature", "humidity", "pressure", "cpu_usage"]
         sent_count = 0
         failed_sends = 0
@@ -160,7 +158,7 @@ class TestLoadPerformance:
                     total_elapsed = time.time() - start_time
                     actual_rate = sent_count / total_elapsed
                     print(
-                        f"    [{second+1:3d}s] sent={sent_count}, "
+                        f"    [{second + 1:3d}s] sent={sent_count}, "
                         f"rate={actual_rate:.0f}/s, "
                         f"rate_limited={rate_limited}, failed={failed_sends}"
                     )
@@ -184,9 +182,7 @@ class TestLoadPerformance:
 
         while time.time() - start_wait < PROCESSING_TIMEOUT:
             async with db_pool.acquire() as conn:
-                final_events = await conn.fetchval(
-                    "SELECT COUNT(*) FROM telemetry_events"
-                )
+                final_events = await conn.fetchval("SELECT COUNT(*) FROM telemetry_events")
 
             new_events = final_events - baseline_events
             if new_events >= expected_persisted:
@@ -194,12 +190,8 @@ class TestLoadPerformance:
             await asyncio.sleep(5)
 
         async with db_pool.acquire() as conn:
-            final_events = await conn.fetchval(
-                "SELECT COUNT(*) FROM telemetry_events"
-            )
-            final_dlq = await conn.fetchval(
-                "SELECT COUNT(*) FROM dead_letter_events"
-            )
+            final_events = await conn.fetchval("SELECT COUNT(*) FROM telemetry_events")
+            final_dlq = await conn.fetchval("SELECT COUNT(*) FROM dead_letter_events")
 
         new_events = final_events - baseline_events
         new_dlq = final_dlq - baseline_dlq
@@ -211,14 +203,16 @@ class TestLoadPerformance:
         print(f"    DLQ entries: {new_dlq}")
         print(f"    Total accounted: {accounted_for}")
         print(f"    Expected (sent with 202): {sent_count}")
-        print(f"    Drop rate: {max(0, sent_count - accounted_for) / max(1, sent_count) * 100:.2f}%")
+        print(
+            f"    Drop rate: {max(0, sent_count - accounted_for) / max(1, sent_count) * 100:.2f}%"
+        )
         print(f"    Effective throughput: {new_events / total_send_time:.0f} events/sec persisted")
 
         # --- Assertions ---
         # All sent events should be accounted for (persisted or in DLQ)
         drop_rate = max(0, sent_count - accounted_for) / max(1, sent_count)
         assert drop_rate < 0.01, (
-            f"Drop rate too high: {drop_rate*100:.2f}%. "
+            f"Drop rate too high: {drop_rate * 100:.2f}%. "
             f"Sent {sent_count}, accounted for {accounted_for} "
             f"(persisted={new_events}, dlq={new_dlq})"
         )
