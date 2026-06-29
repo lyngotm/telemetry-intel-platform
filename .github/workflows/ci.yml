@@ -20,6 +20,7 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
+  PYTHONPATH: .
   # Dummy values for services that need env vars at import time
   POSTGRES_HOST: localhost
   POSTGRES_PORT: 5432

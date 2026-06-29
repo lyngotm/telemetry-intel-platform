@@ -47,6 +47,7 @@ async def ingest_telemetry(
     event: TelemetryEventCreate,
     conn: asyncpg.Connection = Depends(get_db_connection),
     producer: AIOKafkaProducer = Depends(get_kafka_producer),
+    redis_client: aioredis.Redis = Depends(get_redis_client),
     current_user: UserPayload = Depends(require_role("operator")),
     _rate_limit: None = Depends(require_rate_limit("ingestion")),
 ):
@@ -59,15 +60,24 @@ async def ingest_telemetry(
     The device_id must reference a registered device.
     """
     # Verify the device exists before accepting the event
-    device = await conn.fetchrow(
-        "SELECT device_id FROM devices WHERE device_id = $1",
-        event.device_id,
-    )
-    if not device:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device {event.device_id} not found. Register it first via POST /api/v1/devices.",
+    device_exists = False
+    try:
+        cached = await redis_client.exists(f"device:{event.device_id}")
+        if cached:
+            device_exists = True
+    except Exception:
+        pass  # Redis unavailable — fall through to PostgreSQL
+
+    if not device_exists:
+        device = await conn.fetchrow(
+            "SELECT device_id FROM devices WHERE device_id = $1",
+            event.device_id,
         )
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Device {event.device_id} not found. Register it first via POST /api/v1/devices.",
+            )
 
     # Publish to Kafka (fail explicitly if Kafka is unreachable)
     try:
