@@ -249,4 +249,39 @@ Documenting key design decisions and their rationale as the project evolves.
 **Tradeoff:** Data is duplicated across two stores. Ingestion must write to both (within a single operation in `knowledge.py`). If one write succeeds and the other fails, the stores become inconsistent. For this project, we accept this risk. Production would wrap both writes in a saga pattern or use a two-phase approach (write to PostgreSQL first as source of truth, then async embed/upsert to ChromaDB with retry).
 
 
+## 014: Dead-Letter Queue Dual-Write (Kafka Topic + PostgreSQL Table)
+
+**Date:** 2026-06-28
+**Status:** Accepted
+
+**Context:** Failed validation events were published to the `telemetry.dlq` Kafka topic but never persisted to a queryable store. Operators had no way to inspect failed events without consuming the Kafka topic directly.
+
+**Decision:** The Ingestion Consumer's `send_to_dlq()` now writes to both the `telemetry.dlq` Kafka topic and the `dead_letter_events` PostgreSQL table. A new `GET /api/v1/telemetry/dlq` endpoint (operator+) exposes failed events for debugging.
+
+**Rationale:**
+- The Kafka topic preserves the existing event-stream semantics (other consumers could process the DLQ), while the PostgreSQL table provides ad-hoc queryability (filter by time, paginate, inspect error reasons).
+- Persistence failures are caught and logged without failing the Kafka publish — the DLQ write is best-effort so one storage layer failing doesn't break the other.
+- Non-JSON payloads are wrapped as `{"raw": <payload>}` before insertion to satisfy the JSONB column constraint.
+
+**Tradeoff:** Data is duplicated across Kafka and PostgreSQL. Acceptable because DLQ volume is low (only malformed events) and the two stores serve different access patterns.
+
+---
+
+## 015: Redis-First Device Existence Check on Ingestion
+
+**Date:** 2026-06-29
+**Status:** Accepted
+
+**Context:** Every `POST /api/v1/telemetry` request verified device existence with a PostgreSQL query, adding a database round-trip to the hot ingestion path. Load testing showed per-request latency of ~6-7ms limiting single-worker throughput to ~133 events/sec.
+
+**Decision:** Check Redis first (`EXISTS device:{device_id}`) and fall back to PostgreSQL only on cache miss or Redis failure. The `device:{device_id}` hash is already populated by the Ingestion Consumer's enrichment step.
+
+**Rationale:**
+- Sub-millisecond Redis existence check replaces a PostgreSQL round-trip for devices that have already sent at least one event (the common case).
+- Falls back gracefully: brand-new devices and Redis outages still resolve correctly via PostgreSQL.
+- Reuses the existing `device:{device_id}` cache key — no new cache pattern needed.
+
+**Tradeoff:** Marginal benefit in isolation because the throughput ceiling is the cumulative per-request chain (JWT verification, rate limiting, Kafka ACK), not any single step. The real scaling path is horizontal (more workers/pods). Documented here as a targeted optimization that reduces database load under sustained throughput.
+
+
 
