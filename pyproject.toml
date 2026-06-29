@@ -60,8 +60,10 @@ testpaths = [
     "tests", "services/api_gateway/tests", "services/ingestion_consumer/tests", "services/anomaly_detection/tests", "services/diagnosis_service/tests"
 ]
 markers = [
-    "manual: tests requiring manual Docker container manipulation",
-    "integration: tests requiring running services (Docker + API + consumers)",
+    "integration: tests requiring full running stack (PostgreSQL, Kafka, Redis, API Gateway, consumers, detection)",
+    "manual: tests requiring manual Docker container manipulation (stop/start containers)",
+    "resilience: failure injection tests (Redis kill/recover, Kafka unavailability) — requires docker compose",
+    "call_llm: tests that call LLM (incur cost, require valid credentials)",
 ]
 
 [tool.ruff]

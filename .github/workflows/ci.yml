@@ -157,7 +157,7 @@ jobs:
 
       - name: Run integration tests (excluding diagnosis)
         run: |
-          uv run pytest tests/integration/test_pipeline.py tests/integration/test_cache.py tests/integration/test_auth.py -v -m "integration and not manual" --tb=short || true
+          uv run pytest -v -m "integration and not manual and not call_llm" --tb=short
 
       - name: Tear down
         if: always()

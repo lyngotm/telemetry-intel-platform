@@ -11,69 +11,113 @@ The system follows an event-driven microservices architecture with Apache Kafka 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    subgraph Clients
-        SIM[Telemetry Simulator]
-        USER[User / Dashboard]
-    end
+%%{init: {'themeVariables': {'fontSize': '18px'}}}%%
+flowchart TD
+    %% ---- Client ----
+    CLIENT[Client<br/>simulator · dashboard · devices]
 
+    %% ---- API Gateway ----
     subgraph API["API Gateway (FastAPI)"]
-        POST_T[POST /api/v1/telemetry]
-        GET_T[GET /api/v1/telemetry]
-        POST_D[POST /api/v1/devices]
-        GET_A[GET /api/v1/anomalies]
+        POST_EP["POST<br/>telemetry · devices · knowledge/ingest · auth/token"]
+        GET_EP["GET<br/>telemetry · anomalies · devices · diagnosis · dlq · knowledge"]
+        PATCH_EP["PATCH<br/>anomalies/{id}/status"]
     end
 
+    %% ---- Kafka ----
     subgraph Kafka["Kafka Topics"]
         RAW[telemetry.raw]
         ENRICHED[telemetry.enriched]
+        ANOM[anomalies.detected]
         DLQ[telemetry.dlq]
-        ANOM_TOPIC[anomalies.detected]
     end
 
+    %% ---- Consumers ----
     subgraph Consumers["Consumer Services"]
         IC[Ingestion Consumer]
-        AD[Anomaly Detection Service]
-        DS[Diagnosis Service<br/>Week 5]
+        AD[Anomaly Detection]
+        DS[Diagnosis Service]
     end
 
+    %% ---- Data Stores ----
     subgraph Data["Data Stores"]
-        PG[(PostgreSQL<br/>Events / Anomalies / Devices)]
-        REDIS[(Redis<br/>Cache + Windows + Metadata)]
-        CHROMA[(ChromaDB<br/>Week 5)]
+        PG[("PostgreSQL<br/>devices · telemetry_events<br/>anomalies · diagnoses<br/>dead_letter_events · incidents_knowledge")]
+        REDIS[("Redis<br/>device metadata · rolling windows<br/>telemetry cache · rate limiting")]
+        CHROMA[("ChromaDB<br/>incident_embeddings")]
     end
 
-    %% Client → API
-    SIM -->|POST events| POST_T
-    USER -->|queries| GET_T
-    USER -->|anomaly queries| GET_A
-
-    %% API → Kafka / Data
-    POST_T -->|publish| RAW
-    GET_T -->|cache-aside| REDIS
-    GET_T -->|cache miss| PG
-    GET_A -->|query| PG
-
-    %% Ingestion Consumer
+    %% ---- Ingestion path (edges 0-8) ----
+    CLIENT -->|POST events| POST_EP
+    POST_EP -->|publish| RAW
+    POST_EP -->|device check| REDIS
     RAW --> IC
     IC -->|enrich: HGETALL| REDIS
-    IC -->|fallback lookup| PG
     IC -->|persist event| PG
-    IC -->|publish enriched| ENRICHED
+    IC -->|publish| ENRICHED
     IC -->|validation failure| DLQ
+    IC -->|persist failed| PG
 
-    %% Anomaly Detection
+    %% ---- Anomaly detection (edges 9-12) ----
     ENRICHED --> AD
-    AD -->|rolling window: ZADD/ZRANGE| REDIS
+    AD -->|rolling window| REDIS
     AD -->|persist anomaly| PG
-    AD -->|publish| ANOM_TOPIC
+    AD -->|publish| ANOM
 
-    %% Diagnosis (Week 5)
-    ANOM_TOPIC --> DS
+    %% ---- Diagnosis (edges 13-16) ----
+    ANOM --> DS
     DS -->|recent history| PG
-    DS -->|device metadata| REDIS
     DS -->|semantic search| CHROMA
     DS -->|write diagnosis| PG
+
+    %% ---- Query path (edges 17-19) ----
+    CLIENT -->|queries| GET_EP
+    GET_EP -->|cache-aside / rate limit| REDIS
+    GET_EP -->|read| PG
+
+    %% ---- Status update path (edges 20-21) ----
+    CLIENT -->|update status| PATCH_EP
+    PATCH_EP -->|update anomaly status| PG
+
+    %% ---- Flow color coding ----
+    linkStyle 0,1,2,3,4,5,6,7,8 stroke:#2563eb,stroke-width:2px
+    linkStyle 9,10,11,12 stroke:#ea580c,stroke-width:2px
+    linkStyle 13,14,15,16 stroke:#16a34a,stroke-width:2px
+    linkStyle 17,18,19 stroke:#9333ea,stroke-width:2px
+    linkStyle 20,21 stroke:#64748b,stroke-width:2px
+```
+**Flow legend:** 🔵 Ingestion · 🟠 Anomaly Detection · 🟢 Diagnosis · 🟣 Query · ⚪ Status Update
+
+## Observability
+
+Prometheus scrapes the `/metrics` endpoint of every service on a 15-second
+interval. Grafana queries Prometheus to render four auto-provisioned dashboards.
+
+```mermaid
+%%{init: {'themeVariables': {'fontSize': '18px'}}}%%
+flowchart LR
+    subgraph Services["Application Services"]
+        API[API Gateway<br/>:8000/metrics]
+        IC[Ingestion Consumer<br/>:9090/metrics]
+        AD[Anomaly Detection<br/>:9091/metrics]
+        DS[Diagnosis Service<br/>:9092/metrics]
+    end
+
+    PROM[(Prometheus<br/>15s scrape · 7d retention)]
+
+    subgraph Dashboards["Grafana Dashboards"]
+        D1[System Overview]
+        D2[Ingestion Pipeline]
+        D3[Anomaly Detection]
+        D4[Diagnosis Service]
+    end
+
+    API -->|scrape| PROM
+    IC -->|scrape| PROM
+    AD -->|scrape| PROM
+    DS -->|scrape| PROM
+    PROM -->|PromQL| D1
+    PROM -->|PromQL| D2
+    PROM -->|PromQL| D3
+    PROM -->|PromQL| D4
 ```
 
 ## Tech Stack
@@ -89,47 +133,6 @@ flowchart LR
 | Orchestration | Kubernetes (kind) + Terraform |
 | Observability | Prometheus + Grafana |
 | Testing | pytest + pytest-asyncio |
-
-## Current Status
-
-**Week 1 ✅ — Core Ingestion Pipeline**
-- Simulator → API → Kafka → Consumer → PostgreSQL → GET endpoint
-- Dead-letter queue for malformed events
-
-**Week 2 ✅ — Redis Integration + Anomaly Detection**
-- Device metadata enrichment via Redis (HSET/HGETALL with PostgreSQL fallback)
-- Anomaly Detection Service with rolling windows (Redis sorted sets) and z-score
-- Cache-aside on GET /api/v1/telemetry (60s TTL)
-- GET /api/v1/anomalies and GET /api/v1/anomalies/{id} endpoints
-- Simulator with anomaly injection and post-run summary
-
-**Week 3 ✅ — Security + Hardening**
-- JWT authentication (RS256) with token issuance endpoint
-- RBAC with three-role hierarchy (viewer < operator < admin)
-- Rate limiting via Redis sliding window (1000 req/min ingestion, 100 req/min queries)
-- Resilience: cache-aside fails gracefully when Redis is down, 503 on Kafka failure
-- Simulator authenticates as operator before sending telemetry
-
-**Week 4 ✅ — Containerization, Orchestration & Observability**
-- Prometheus instrumentation on all services (`/metrics` endpoints)
-- Health (`/health`) and readiness (`/ready`) probes
-- Prometheus scraping all three services (15s interval)
-- Grafana with three auto-provisioned dashboards (System Overview, Ingestion Pipeline, Anomaly Detection)
-- Multi-stage Dockerfiles for all services (python:3.11-slim + uv, ~76MB each)
-- docker-compose.yml runs full stack (apps + Prometheus + Grafana) with one command
-- Kubernetes deployment via kind (namespace, ConfigMaps, Secrets, Deployments, Services)
-- HPA for API Gateway (CPU target 70%, 1–5 replicas)
-- Terraform defining production AWS infrastructure (VPC, EKS, RDS, ElastiCache, MSK, ECR, IAM)
-
-**Week 5 ✅ — RAG Diagnosis Pipeline**
-- Knowledge Ingestion: 30 synthetic incident reports chunked, embedded (Cohere Embed v4), and stored in ChromaDB + PostgreSQL
-- Diagnosis Service: Kafka consumer on `anomalies.detected` runs three-phase RAG pipeline (context → retrieval → generation)
-- AWS Bedrock integration via application inference profiles (Cohere Embed v4 for embeddings, Claude Haiku 4.5 for generation)
-- `GET /api/v1/anomalies/{id}/diagnosis` returns structured diagnosis or pending status
-- `POST /api/v1/knowledge/ingest` (admin) and `GET /api/v1/knowledge/incidents` (viewer+)
-- `PATCH /api/v1/anomalies/{id}/status` for workflow transitions (open → acknowledged → resolved)
-- Local embedding fallback (`EMBEDDING_PROVIDER=local`) for development without AWS credentials
-- Dockerfile, docker-compose, K8s manifests, Prometheus metrics (`diagnoses_generated_total`, `diagnosis_generation_seconds`)
 
 ---
 
@@ -213,25 +216,32 @@ PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --port 80
 PYTHONPATH=. uv run python -m services.ingestion_consumer.app.main
 PYTHONPATH=. uv run python -m services.anomaly_detection.app.main
 PYTHONPATH=. uv run python -m services.diagnosis_service.app.main
+
+# Start simulator
 PYTHONPATH=. uv run python -m services.simulator.app.main
 ```
 
 ### Run Tests
 
 ```bash
-# Unit tests only (no infrastructure needed)
+# Unit tests only — no infrastructure, no cost
 PYTHONPATH=. uv run pytest -v -m "not integration and not manual"
 
-# Integration tests (requires full stack running: Docker services + API + consumer + detection)
-PYTHONPATH=. uv run pytest -v -m "integration and not manual"
+# Integration tests (pipeline, cache, auth) — no LLM cost
+PYTHONPATH=. uv run pytest -v -m "integration and not manual and not call_llm"
 
-# All automated tests
-PYTHONPATH=. uv run pytest -v -m "not manual"
+# Everything non-destructive and free
+PYTHONPATH=. uv run pytest -v -m "not manual and not call_llm"
 
 # Manual resilience tests (stop Redis/Kafka first)
 # docker stop tip-redis tip-kafka
-PYTHONPATH=. uv run pytest -v -m "manual"
+PYTHONPATH=. uv run pytest -v -m "resilience"
 # docker start tip-redis tip-kafka
+
+# Follow instructions on tests/integration/test_load.py
+
+# LLM tests only — conscious cost decision
+PYTHONPATH=. uv run pytest -v -m "call_llm"
 ```
 ---
 
@@ -479,6 +489,7 @@ telemetry-intelligence-platform/
 | GET | `/api/v1/knowledge/incidents` | viewer | List ingested incident documents with filters |
 | GET | `/health` | — | Liveness check |
 | GET | `/ready` | — | Readiness check (verifies dependencies) |
+| GET | `/api/v1/telemetry/dlq` | operator | Query dead-letter queue (failed validation events) |
 
 Full interactive API docs available at `/docs` when the API is running.
 

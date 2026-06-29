@@ -21,7 +21,7 @@ import subprocess
 import httpx
 import pytest
 
-pytestmark = [pytest.mark.integration, pytest.mark.manual]
+pytestmark = [pytest.mark.integration, pytest.mark.manual, pytest.mark.resilience]
 
 BASE_URL = "http://localhost:8000"
 POSTGRES_DSN = "postgresql://telemetry_user:telemetry_pass@localhost:5432/telemetry"
