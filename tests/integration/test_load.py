@@ -22,7 +22,7 @@ import asyncpg
 import httpx
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.manual]
 
 BASE_URL = "http://localhost:8000"
 POSTGRES_DSN = "postgresql://telemetry_user:telemetry_pass@localhost:5432/telemetry"

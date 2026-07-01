@@ -17,7 +17,7 @@ import time
 import httpx
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.call_llm]
 
 BASE_URL = "http://localhost:8000"
 TIMEOUT = 120  # Max seconds to wait for diagnosis generation
