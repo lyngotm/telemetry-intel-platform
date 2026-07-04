@@ -49,9 +49,9 @@ data:
   CHROMA_PORT: "8000"
 
   # AWS Bedrock
-  AWS_REGION: "us-west-2"
-  BEDROCK_MODEL_ID: "arn:aws:bedrock:us-west-2:233532778289:application-inference-profile/0zhhvnxrn29h"
-  BEDROCK_EMBEDDING_MODEL_ID: "arn:aws:bedrock:us-west-2:233532778289:application-inference-profile/5gxvs093jnun"
+  AWS_REGION: ""
+  CLAUDE_MODEL_ID: ""
+  CLAUDE_EMBEDDING_MODEL_ID: ""
   EMBEDDING_PROVIDER: "bedrock"
   
   # Logging

@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     chroma_port: int = 8100
 
     # AWS Bedrock
-    aws_region: str = "us-west-2"
+    aws_region: str = ""
     bedrock_model_id: str = ""
     bedrock_embedding_model_id: str = ""
     embedding_provider: str = "bedrock"  # "bedrock" or "local"

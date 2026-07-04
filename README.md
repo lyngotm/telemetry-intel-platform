@@ -8,6 +8,12 @@ This platform collects streaming device telemetry data, detects anomalies using 
 
 The system follows an event-driven microservices architecture with Apache Kafka as the central event backbone, separating the ingestion path (write-heavy, high-throughput) from the query path (read-heavy, low-latency) and the intelligence layer (compute-heavy, async).
 
+
+[![Demo Thumbnail](https://img.youtube.com/vi/W3VOC68UXYs/maxresdefault.jpg)](https://youtu.be/W3VOC68UXYs)
+
+[![▶ Watch Demo — 2:50 min](https://img.shields.io/badge/▶_Watch_Demo-2:50_min-red?style=for-the-badge&logo=youtube)](https://youtu.be/W3VOC68UXYs)
+
+
 ## Architecture
 
 ```mermaid
@@ -129,7 +135,7 @@ flowchart LR
 | Primary Store | PostgreSQL (asyncpg) |
 | Cache / State | Redis |
 | Vector Store | ChromaDB |
-| LLM / Embeddings | AWS Bedrock — Cohere Embed + Claude |
+| LLM / Embeddings | Cohere Embed + Claude |
 | Orchestration | Kubernetes (kind) + Terraform |
 | Observability | Prometheus + Grafana |
 | Testing | pytest + pytest-asyncio |
@@ -357,7 +363,7 @@ kind delete cluster --name tip
 
 ## RAG Diagnosis Pipeline
 
-The platform automatically generates root-cause diagnoses for detected anomalies using a Retrieval-Augmented Generation (RAG) pipeline powered by AWS Bedrock.
+The platform automatically generates root-cause diagnoses for detected anomalies using a Retrieval-Augmented Generation (RAG) pipeline powered by LLM.
 
 ### Architecture
 
@@ -365,9 +371,9 @@ The platform automatically generates root-cause diagnoses for detected anomalies
 flowchart TD
     KAFKA[anomalies.detected] --> DS[Diagnosis Service]
     DS -->|1. Context| PG[(PostgreSQL<br/>recent telemetry)]
-    DS -->|2. Embed query| BEDROCK_E[Cohere Embed v4<br/>via Bedrock]
-    BEDROCK_E --> CHROMA[(ChromaDB<br/>top-5 chunks)]
-    DS -->|3. Generate| BEDROCK_G[Claude Haiku 4.5<br/>via Bedrock]
+    DS -->|2. Embed query| CLAUDE_E[Embedding Model]
+    CLAUDE_E --> CHROMA[(ChromaDB<br/>top-5 chunks)]
+    DS -->|3. Generate| CLAUDE_G[LLM]
     CHROMA --> DS
     DS -->|4. Persist| PG2[(PostgreSQL<br/>diagnoses table)]
     API[GET /anomalies/id/diagnosis] --> PG2
@@ -422,15 +428,15 @@ When an anomaly is detected, the Diagnosis Service automatically generates a str
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BEDROCK_MODEL_ID` | — | ARN of the generation model (Claude Haiku 4.5) |
-| `BEDROCK_EMBEDDING_MODEL_ID` | — | ARN of the embedding model (Cohere Embed v4) |
-| `EMBEDDING_PROVIDER` | `bedrock` | Use `local` for ChromaDB's built-in model (no AWS needed) |
+| `CLAUDE_MODEL_ID` | — | generation model (Claude Haiku 4.5) |
+| `CLAUDE_EMBEDDING_MODEL_ID` | — | embedding model (Cohere Embed v4) |
+| `EMBEDDING_PROVIDER` | `bedrock` | Use `local` for ChromaDB's built-in model |
 | `CHROMA_HOST` | `localhost` | ChromaDB hostname |
 | `CHROMA_PORT` | `8100` | ChromaDB port (host-mapped; internal is 8000) |
 
-### Running Without AWS Credentials
+### Running Without Claude Credentials
 
-Set `EMBEDDING_PROVIDER=local` in `.env` to use ChromaDB's built-in embedding model (all-MiniLM-L6-v2, 384 dimensions) for knowledge ingestion and retrieval. This removes the AWS dependency for the embedding step only — the diagnosis generation step (Claude Haiku 4.5) still requires AWS Bedrock credentials. Without Bedrock credentials, incidents can be ingested and retrieved semantically, but automated diagnoses will not be generated.
+Set `EMBEDDING_PROVIDER=local` in `.env` to use ChromaDB's built-in embedding model (all-MiniLM-L6-v2, 384 dimensions) for knowledge ingestion and retrieval. This removes the Claude dependency for the embedding step only — the diagnosis generation step (Claude Haiku 4.5) still requires Claude credentials. Without Claude credentials, incidents can be ingested and retrieved semantically, but automated diagnoses will not be generated.
 
 **Note**: You cannot mix embedding providers — if you ingest with `local`, you must query with `local`. Choose one provider per deployment and re-ingest if you switch.
 
