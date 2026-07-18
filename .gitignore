@@ -8,6 +8,8 @@ __pycache__/
 
 keys/
 k8s/jwt-keys-secret.yaml
+k8s/secret.yaml
+.DS_Store
 
 terraform.tfvars
 terraform/.terraform/

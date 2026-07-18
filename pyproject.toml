@@ -3,6 +3,12 @@ name = "telemetry-intelligence-platform"
 version = "0.1.0"
 description = "Real-time telemetry ingestion and analysis platform with AI-powered diagnosis"
 requires-python = ">=3.11"
+authors = [{name = "Ly Ngo", email = "ly.ngotm@gmail.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/lyngotm/telemetry-intel-platform"
 
 dependencies = [
     # API Framework

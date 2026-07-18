@@ -151,6 +151,8 @@ flowchart LR
 
 ### Setup
 
+> ⚠️ **Note:** Docker Compose is intended for local development only. Infrastructure ports (PostgreSQL, Redis, Kafka) are exposed on the host for convenience and should not be used in production.
+
 ```bash
 # Clone and enter project
 git clone <repo-url>
