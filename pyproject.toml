@@ -6,10 +6,6 @@ requires-python = ">=3.11"
 authors = [{name = "Ly Ngo", email = "ly.ngotm@gmail.com"}]
 license = {text = "MIT"}
 readme = "README.md"
-
-[project.urls]
-Repository = "https://github.com/lyngotm/telemetry-intel-platform"
-
 dependencies = [
     # API Framework
     "fastapi>=0.115.0",
@@ -52,6 +48,9 @@ dependencies = [
     "boto3>=1.35.0",
 
 ]
+
+[project.urls]
+Repository = "https://github.com/lyngotm/telemetry-intel-platform"
 
 [dependency-groups]
 dev = [
