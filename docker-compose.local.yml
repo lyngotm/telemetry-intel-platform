@@ -1,0 +1,19 @@
+# docker-compose.local.yml
+# Override for local development: services run on host, not in Docker.
+# Prometheus scrapes host.docker.internal, Alertmanager webhooks to host.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d prometheus alertmanager
+
+services:
+  prometheus:
+    volumes:
+      - ./monitoring/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - custom_rules:/etc/prometheus/custom_rules
+      - prometheus_data:/prometheus
+
+  alertmanager:
+    volumes:
+      - ./monitoring/alertmanager.local.yml:/etc/alertmanager/alertmanager.yml:ro

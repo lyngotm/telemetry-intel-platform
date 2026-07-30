@@ -1,5 +1,5 @@
 # ============================================================
-# Prometheus ConfigMap
+# Prometheus ConfigMap (includes alerting config)
 # ============================================================
 apiVersion: v1
 kind: ConfigMap
@@ -10,6 +10,18 @@ data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/rules/recording_rules.yml
+      - /etc/prometheus/rules/alert_rules.yml
+      - /etc/prometheus/rules/custom_rules.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager:9093
 
     scrape_configs:
       - job_name: "api-gateway"
@@ -29,12 +41,297 @@ data:
           - targets: ["anomaly-detection:9091"]
             labels:
               service: "anomaly-detection"
-      
+
       - job_name: "diagnosis-service"
         static_configs:
           - targets: ["diagnosis-service:9092"]
             labels:
               service: "diagnosis-service"
+
+      - job_name: "alert-receiver"
+        static_configs:
+          - targets: ["alert-receiver:9097"]
+            labels:
+              service: "alert-receiver"
+
+# ============================================================
+# Alert Rules ConfigMap
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: tip
+data:
+  recording_rules.yml: |
+    groups:
+      - name: tip_http_recording_rules
+        interval: 15s
+        rules:
+          - record: job:http_requests:rate5m
+            expr: sum(rate(http_requests_total[5m])) by (job)
+          - record: job:http_errors_5xx:rate5m
+            expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job)
+          - record: job:http_error_ratio_5xx:rate5m
+            expr: |
+              (sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job))
+              /
+              clamp_min(sum(rate(http_requests_total[5m])) by (job), 1)
+          - record: job:http_latency_p95:rate5m
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job, endpoint)
+              )
+      - name: tip_ingestion_recording_rules
+        interval: 15s
+        rules:
+          - record: tip:ingestion:rate5m
+            expr: rate(telemetry_events_ingested_total[5m])
+          - record: tip:ingestion:rate1m
+            expr: rate(telemetry_events_ingested_total[1m])
+          - record: tip:dlq_total:rate5m
+            expr: sum(rate(telemetry_events_dlq_total[5m]))
+          - record: tip:kafka_errors_total:rate5m
+            expr: sum(rate(kafka_publish_errors_total[5m]))
+      - name: tip_anomaly_recording_rules
+        interval: 15s
+        rules:
+          - record: tip:anomalies_total:rate5m
+            expr: sum(rate(anomalies_detected_total[5m]))
+          - record: tip:anomalies_critical_high:rate5m
+            expr: sum(rate(anomalies_detected_total{severity=~"critical|high"}[5m]))
+          - record: tip:events_analyzed:rate5m
+            expr: rate(telemetry_events_analyzed_total[5m])
+      - name: tip_diagnosis_recording_rules
+        interval: 15s
+        rules:
+          - record: tip:diagnosis_failures_total:rate5m
+            expr: sum(rate(diagnoses_failed_total[5m]))
+          - record: tip:diagnosis_failure_ratio:rate5m
+            expr: |
+              sum(rate(diagnoses_failed_total[5m]))
+              /
+              clamp_min(
+                sum(rate(diagnoses_generated_total[5m])) + sum(rate(diagnoses_failed_total[5m])),
+                0.001
+              )
+          - record: tip:diagnosis_latency_p95:rate5m
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(diagnosis_generation_seconds_bucket[5m])) by (le)
+              )
+      - name: tip_compound_recording_rules
+        interval: 15s
+        rules:
+          - record: tip:ingestion_rate_vs_baseline:ratio
+            expr: |
+              rate(telemetry_events_ingested_total[5m])
+              /
+              clamp_min(rate(telemetry_events_ingested_total[5m] offset 15m), 0.001)
+          - record: tip:detection_rate_vs_baseline:ratio
+            expr: |
+              sum(rate(anomalies_detected_total[5m]))
+              /
+              clamp_min(sum(rate(anomalies_detected_total[5m] offset 15m)), 0.001)
+
+  alert_rules.yml: |
+    groups:
+      - name: tip_critical
+        rules:
+          - alert: ServiceDown
+            expr: up == 0
+            for: 1m
+            labels:
+              severity: critical
+              tier: platform
+            annotations:
+              summary: "Service {{ $labels.job }} is DOWN"
+              description: "Service {{ $labels.job }} has been unreachable for more than 1 minute."
+          - alert: IngestionPipelineStalled
+            expr: tip:ingestion:rate5m == 0
+            for: 5m
+            labels:
+              severity: critical
+              tier: platform
+              pipeline: ingestion
+            annotations:
+              summary: "Ingestion pipeline has stalled"
+              description: "No telemetry events ingested in 5+ minutes."
+          - alert: CriticalAnomalyBurst
+            expr: sum(rate(anomalies_detected_total{severity="critical"}[5m])) > 0.1
+            for: 2m
+            labels:
+              severity: critical
+              tier: product
+              pipeline: detection
+            annotations:
+              summary: "Burst of critical anomalies detected"
+              description: "Critical anomaly rate exceeds 0.1/sec for 2+ minutes."
+          - alert: DiagnosisPipelineDown
+            expr: |
+              tip:diagnosis_failure_ratio:rate5m > 0.9
+              and
+              (sum(rate(diagnoses_failed_total[5m])) + sum(rate(diagnoses_generated_total[5m]))) > 0
+            for: 5m
+            labels:
+              severity: critical
+              tier: platform
+              pipeline: diagnosis
+            annotations:
+              summary: "Diagnosis pipeline failure rate >90%"
+              description: "The diagnosis pipeline is almost completely failing."
+          - alert: AlertReceiverDown
+            expr: up{job="alert-receiver"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              tier: platform
+              pipeline: alerting
+            annotations:
+              summary: "Alert receiver is DOWN"
+              description: "The webhook alert receiver is unreachable."
+      - name: tip_warning
+        rules:
+          - alert: HighAPIErrorRate
+            expr: job:http_error_ratio_5xx:rate5m{job="api-gateway"} > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              tier: platform
+              pipeline: api
+            annotations:
+              summary: "API 5xx error rate >5%"
+          - alert: HighAPILatency
+            expr: job:http_latency_p95:rate5m{job="api-gateway"} > 2.0
+            for: 5m
+            labels:
+              severity: warning
+              tier: platform
+              pipeline: api
+            annotations:
+              summary: "API p95 latency >2s"
+          - alert: KafkaPublishErrors
+            expr: tip:kafka_errors_total:rate5m > 0
+            for: 3m
+            labels:
+              severity: warning
+              tier: platform
+              pipeline: ingestion
+            annotations:
+              summary: "Kafka publish errors occurring"
+          - alert: SlowDiagnosisGeneration
+            expr: tip:diagnosis_latency_p95:rate5m > 60
+            for: 5m
+            labels:
+              severity: warning
+              tier: platform
+              pipeline: diagnosis
+            annotations:
+              summary: "Diagnosis p95 latency >60s"
+      - name: tip_compound
+        rules:
+          - alert: PipelineDegradation
+            expr: |
+              (tip:ingestion_rate_vs_baseline:ratio < 0.5)
+              and
+              (tip:detection_rate_vs_baseline:ratio < 0.2)
+            for: 5m
+            labels:
+              severity: critical
+              tier: platform
+              pipeline: detection
+              compound: "true"
+            annotations:
+              summary: "Pipeline degradation: ingestion and detection dropping"
+          - alert: CascadingFailure
+            expr: |
+              (up{job="ingestion-consumer"} == 0 or up{job="anomaly-detection"} == 0)
+              and on()
+              (job:http_error_ratio_5xx:rate5m{job="api-gateway"} > 0.1)
+            for: 2m
+            labels:
+              severity: critical
+              tier: platform
+              pipeline: ingestion
+              compound: "true"
+            annotations:
+              summary: "Cascading failure: backend down + API errors spiking"
+          - alert: DetectionWithoutDiagnosis
+            expr: |
+              (tip:anomalies_critical_high:rate5m > 0.01)
+              and on()
+              (tip:diagnosis_failure_ratio:rate5m > 0.5)
+            for: 5m
+            labels:
+              severity: critical
+              tier: platform
+              pipeline: diagnosis
+              compound: "true"
+            annotations:
+              summary: "Critical anomalies detected but diagnosis failing"
+
+  custom_rules.yml: |
+    groups:
+      - name: tip_custom_monitors
+        rules: []
+
+# ============================================================
+# Alertmanager ConfigMap
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: tip
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      receiver: webhook-all
+      group_by: ["alertname", "pipeline", "severity"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: webhook-all
+          matchers:
+            - severity = "critical"
+          group_wait: 10s
+          group_interval: 1m
+          repeat_interval: 1h
+        - receiver: webhook-all
+          matchers:
+            - severity = "warning"
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+    inhibit_rules:
+      - source_matchers:
+          - alertname = "ServiceDown"
+        target_matchers:
+          - severity = "warning"
+        equal: ["pipeline"]
+      - source_matchers:
+          - alertname = "CascadingFailure"
+        target_matchers:
+          - alertname = "ServiceDown"
+        equal: ["pipeline"]
+      - source_matchers:
+          - severity = "critical"
+        target_matchers:
+          - severity = "info"
+        equal: ["pipeline"]
+
+    receivers:
+      - name: webhook-all
+        webhook_configs:
+          - url: "http://alert-receiver:8000/alerts"
+            send_resolved: true
 
 # ============================================================
 # Prometheus Deployment + Service
@@ -62,16 +359,29 @@ spec:
           args:
             - "--config.file=/etc/prometheus/prometheus.yml"
             - "--storage.tsdb.retention.time=7d"
+            - "--web.enable-lifecycle"
           ports:
             - containerPort: 9090
           volumeMounts:
             - name: prometheus-config
               mountPath: /etc/prometheus/prometheus.yml
               subPath: prometheus.yml
+            - name: prometheus-rules
+              mountPath: /etc/prometheus/rules
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       volumes:
         - name: prometheus-config
           configMap:
             name: prometheus-config
+        - name: prometheus-rules
+          configMap:
+            name: prometheus-rules
 ---
 apiVersion: v1
 kind: Service
@@ -87,6 +397,149 @@ spec:
       targetPort: 9090
       nodePort: 30094
 
+# ============================================================
+# Alertmanager Deployment + Service
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config.file=/etc/alertmanager/alertmanager.yml"
+            - "--storage.path=/alertmanager"
+            - "--web.external-url=http://localhost:30095"
+          ports:
+            - containerPort: 9093
+          volumeMounts:
+            - name: alertmanager-config
+              mountPath: /etc/alertmanager/alertmanager.yml
+              subPath: alertmanager.yml
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: alertmanager-config
+          configMap:
+            name: alertmanager-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: tip
+spec:
+  type: NodePort
+  selector:
+    app: alertmanager
+  ports:
+    - port: 9093
+      targetPort: 9093
+      nodePort: 30095
+
+# ============================================================
+# Alert Receiver Deployment + Service
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-receiver
+  namespace: tip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alert-receiver
+  template:
+    metadata:
+      labels:
+        app: alert-receiver
+    spec:
+      containers:
+        - name: alert-receiver
+          image: telemetry-intel-platform-alert-receiver:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+              name: api
+            - containerPort: 9097
+              name: metrics
+          envFrom:
+            - configMapRef:
+                name: tip-config
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tip-secrets
+                  key: POSTGRES_PASSWORD
+            - name: API_PORT
+              value: "8000"
+            - name: METRICS_PORT
+              value: "9097"
+            - name: TRIAGE_ENABLED
+              value: "true"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-receiver
+  namespace: tip
+spec:
+  selector:
+    app: alert-receiver
+  ports:
+    - name: api
+      port: 8000
+      targetPort: 8000
+    - name: metrics
+      port: 9097
+      targetPort: 9097
 
 # ============================================================
 # Grafana ConfigMaps
@@ -162,6 +615,13 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards
             - name: dashboard-json-files
               mountPath: /var/lib/grafana/dashboards
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       volumes:
         - name: datasources
           configMap:
@@ -186,4 +646,3 @@ spec:
     - port: 3000
       targetPort: 3000
       nodePort: 30030
-

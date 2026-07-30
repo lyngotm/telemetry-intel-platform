@@ -62,7 +62,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = [
-    "tests", "services/api_gateway/tests", "services/ingestion_consumer/tests", "services/anomaly_detection/tests", "services/diagnosis_service/tests"
+    "tests", "services/api_gateway/tests", "services/ingestion_consumer/tests", "services/anomaly_detection/tests", "services/diagnosis_service/tests", "services/alert_receiver/tests"
 ]
 markers = [
     "integration: tests requiring full running stack (PostgreSQL, Kafka, Redis, API Gateway, consumers, detection)",

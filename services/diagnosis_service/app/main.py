@@ -15,13 +15,12 @@ import asyncpg
 import chromadb
 import redis.asyncio as aioredis
 from aiokafka import AIOKafkaConsumer
+from prometheus_client import start_http_server
 
 from services.diagnosis_service.app.config import settings
 from services.diagnosis_service.app.rag_pipeline import run_diagnosis_pipeline
+from shared.metrics import DIAGNOSES_FAILED, DIAGNOSES_GENERATED, DIAGNOSIS_GENERATION_SECONDS
 from shared.models.models import AnomalyDetectedMessage
-from prometheus_client import start_http_server
-from shared.metrics import DIAGNOSES_GENERATED, DIAGNOSES_FAILED, DIAGNOSIS_GENERATION_SECONDS
-
 
 # Setup logging
 logging.basicConfig(
@@ -69,7 +68,7 @@ async def persist_diagnosis(
             json.dumps(diagnosis["recommended_actions"]),
             json.dumps(diagnosis.get("retrieved_incident_ids", [])),
             diagnosis.get("raw_llm_response"),
-            settings.bedrock_model_id,
+            settings.claude_model_id,
             diagnosis.get("generation_time_seconds"),
             datetime.now(timezone.utc),
         )

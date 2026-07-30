@@ -95,7 +95,9 @@ flowchart TD
 ## Observability
 
 Prometheus scrapes the `/metrics` endpoint of every service on a 15-second
-interval. Grafana queries Prometheus to render four auto-provisioned dashboards.
+interval. Grafana queries Prometheus to render five auto-provisioned dashboards.
+Alertmanager evaluates recording rules and alert rules, routing notifications
+to the webhook-based Alert Receiver for persistence and AI-assisted triage.
 
 ```mermaid
 %%{init: {'themeVariables': {'fontSize': '18px'}}}%%
@@ -105,25 +107,33 @@ flowchart LR
         IC[Ingestion Consumer<br/>:9090/metrics]
         AD[Anomaly Detection<br/>:9091/metrics]
         DS[Diagnosis Service<br/>:9092/metrics]
+        AR[Alert Receiver<br/>:9097/metrics]
     end
 
-    PROM[(Prometheus<br/>15s scrape · 7d retention)]
+    PROM[(Prometheus<br/>15s scrape · 7d retention<br/>recording rules · alert rules)]
+
+    AM[Alertmanager<br/>routing · grouping · inhibition]
 
     subgraph Dashboards["Grafana Dashboards"]
         D1[System Overview]
         D2[Ingestion Pipeline]
         D3[Anomaly Detection]
         D4[Diagnosis Service]
+        D5[Alerting]
     end
 
     API -->|scrape| PROM
     IC -->|scrape| PROM
     AD -->|scrape| PROM
     DS -->|scrape| PROM
+    AR -->|scrape| PROM
+    PROM -->|alerts| AM
+    AM -->|webhook| AR
     PROM -->|PromQL| D1
     PROM -->|PromQL| D2
     PROM -->|PromQL| D3
     PROM -->|PromQL| D4
+    PROM -->|PromQL| D5
 ```
 
 ## Tech Stack
@@ -138,6 +148,7 @@ flowchart LR
 | LLM / Embeddings | Cohere Embed + Claude |
 | Orchestration | Kubernetes (kind) + Terraform |
 | Observability | Prometheus + Grafana |
+| Alerting | Alertmanager + Webhook Receiver |
 | Testing | pytest + pytest-asyncio |
 
 ---
@@ -206,6 +217,15 @@ curl -X POST -H "Authorization: Bearer $VIEWER_TOKEN" http://localhost:8000/api/
 
 # Grafana dashboards (admin/admin)
 # Open: http://localhost:3000
+
+# Alertmanager UI (view active alerts, silences)
+# Open: http://localhost:9095
+
+# Alert Receiver health
+curl http://localhost:9096/health
+
+# Active alerts
+curl http://localhost:9096/alerts/active
 ```
 
 ### Local Development (with hot-reload)
@@ -220,13 +240,26 @@ uv sync --dev
 docker compose up -d postgres zookeeper kafka kafka-init redis chromadb
 
 # Start services individually (each in its own terminal)
-PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --port 8000
+PYTHONPATH=. uv run uvicorn services.api_gateway.app.main:app --reload --host 0.0.0.0 --port 8000
 PYTHONPATH=. uv run python -m services.ingestion_consumer.app.main
 PYTHONPATH=. uv run python -m services.anomaly_detection.app.main
 PYTHONPATH=. uv run python -m services.diagnosis_service.app.main
+PYTHONPATH=. uv run uvicorn services.alert_receiver.app.main:app --reload --host 0.0.0.0 --port 9096
 
 # Start simulator
 PYTHONPATH=. uv run python -m services.simulator.app.main
+```
+
+To enable the full alerting pipeline locally (Prometheus evaluates rules → Alertmanager routes → Alert Receiver persists), also start the observability stack in Docker:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres zookeeper kafka kafka-init redis chromadb prometheus alertmanager
+```
+
+After modifying alert rules or recording rules, reload Prometheus without restarting:
+
+```bash
+curl -X POST http://localhost:9094/-/reload
 ```
 
 ### Run Tests
@@ -280,6 +313,7 @@ kind load docker-image telemetry-intel-platform-api-gateway:latest --name tip
 kind load docker-image telemetry-intel-platform-ingestion-consumer:latest --name tip
 kind load docker-image telemetry-intel-platform-anomaly-detection:latest --name tip
 kind load docker-image telemetry-intel-platform-diagnosis-service:latest --name tip
+kind load docker-image telemetry-intel-platform-alert-receiver:latest --name tip
 ```
 
 ### Deploy (in dependency order)
@@ -348,6 +382,7 @@ PYTHONPATH=. API_GATEWAY_URL=http://localhost:30080 uv run python -m services.si
 | API Gateway | http://localhost:30080 | 30080 |
 | Grafana | http://localhost:30030 | 30030 |
 | Prometheus | http://localhost:30094 | 30094 |
+| Alertmanager | http://localhost:30095 | 30095 |
 
 ### HPA (Horizontal Pod Autoscaler)
 
@@ -444,6 +479,84 @@ Set `EMBEDDING_PROVIDER=local` in `.env` to use ChromaDB's built-in embedding mo
 
 ---
 
+## Alerting
+
+The platform includes a full alerting stack: Prometheus evaluates recording rules and alert rules, Alertmanager handles routing/grouping/inhibition, and a custom webhook receiver persists alert state with optional AI-assisted triage.
+
+### Alert Rules (22 rules across 4 tiers)
+
+| Tier | Examples | Action |
+|------|----------|--------|
+| **Critical** | ServiceDown, IngestionPipelineStalled, CriticalAnomalyBurst | Page via PagerDuty + persist |
+| **Warning** | HighAPIErrorRate, HighAPILatency, DLQAccumulating, KafkaPublishErrors | Persist (no page) |
+| **Info** | AnomaliesBeingDetected, DLQEventsPresent | Log only |
+| **Compound** | PipelineDegradation, CascadingFailure, DetectionWithoutDiagnosis | Multi-condition (page) |
+
+Compound alerts fire when multiple conditions are true simultaneously (e.g., ingestion drops >50% AND detection drops >80%), distinguishing root causes from symptoms.
+
+### Alert Receiver Service
+
+A dedicated microservice (`services/alert_receiver/`) that:
+- Receives Alertmanager webhook payloads
+- Persists alert state transitions (firing → resolved) to PostgreSQL
+- Generates AI-assisted triage for critical alerts (LLM or rule-based fallback)
+- Exposes a Monitor CRUD API for programmatic alert rule management
+- Self-monitors via Prometheus metrics on port 9097
+
+**Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/alerts` | Alertmanager webhook receiver |
+| GET | `/alerts` | Query alert history (filters: status, severity, pipeline) |
+| GET | `/alerts/active` | Currently firing alerts with breakdown |
+| GET | `/alerts/{id}` | Single alert detail |
+| GET | `/alerts/{id}/triage` | AI triage summary for a critical alert |
+| POST | `/monitors` | Create custom alert rule |
+| GET | `/monitors` | List custom monitors |
+| PATCH | `/monitors/{id}` | Update/enable/disable a monitor |
+| DELETE | `/monitors/{id}` | Delete a custom monitor |
+
+**Docker Compose ports:**
+- `9095` — Alertmanager UI
+- `9096` — Alert Receiver API
+- `9097` — Alert Receiver metrics (Prometheus scrape)
+
+### Monitor CRUD API
+
+Create custom alert rules programmatically without editing YAML:
+
+```bash
+# Create a monitor
+curl -X POST http://localhost:9096/monitors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "HighIngestionLatency",
+    "expr": "job:http_latency_p95:rate5m{endpoint=\"/api/v1/telemetry\"} > 1.5",
+    "duration": "3m",
+    "severity": "warning",
+    "pipeline": "ingestion"
+  }'
+
+# Disable it
+curl -X PATCH http://localhost:9096/monitors/<id> \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+Rules are stored in PostgreSQL and synced to Prometheus via hot-reload (`/-/reload`). The API response includes `prometheus_reload.success` so you know if the rule is live.
+
+### AI-Assisted Triage
+
+When a critical alert fires, the receiver automatically generates triage context:
+
+- **Product alerts** (anomaly-triggered): Queries existing diagnoses from the Diagnosis Service
+- **Platform alerts** (ServiceDown, PipelineStalled): Invokes LLM for fresh triage, or falls back to detailed rule-based templates with specific investigation steps, blast radius, and remediation actions
+
+Triage works without LLM credentials — the rule-based fallback provides actionable guidance for all 8 platform alert types.
+
+---
+
 ## Project Structure
 
 ```
@@ -461,6 +574,7 @@ telemetry-intelligence-platform/
 │ ├── ingestion_consumer/       # Kafka → Redis enrichment → PostgreSQL
 │ ├── anomaly_detection/        # Rolling window z-score detection
 │ ├── diagnosis_service         # RAG pipeline (context → retrieval → generation)
+│ ├── alert_receiver/           # Alertmanager webhook sink (persistence, triage, monitors API)
 │ └── simulator/                # Telemetry data generator with anomaly injection
 ├── data/
 │ └── incidents/                # 30 synthetic incident reports (JSON) for RAG knowledge base
@@ -468,7 +582,7 @@ telemetry-intelligence-platform/
 │ ├── generate_incidents.py     # Generate synthetic incident files
 │ └── ingest_incidents.py       # Batch ingest incidents into knowledge base
 ├── db/
-│ └── init.sql                  # PostgreSQL schema (devices, telemetry_events, anomalies, diagnoses, incidents_knowledge)
+│ └── init.sql                  # PostgreSQL schema (devices, telemetry_events, anomalies, diagnoses, incidents_knowledge, alert_events, monitors)
 ├── k8s/                        # Kubernetes manifests (kind)
 ├── terraform/                  # AWS production infrastructure (EKS, RDS, ElastiCache, MSK, ECR)
 ├── monitoring/ # Prometheus config + Grafana dashboards

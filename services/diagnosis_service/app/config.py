@@ -33,8 +33,8 @@ class Settings(BaseSettings):
 
     # AWS Bedrock
     aws_region: str = ""
-    bedrock_model_id: str = ""
-    bedrock_embedding_model_id: str = ""
+    claude_model_id: str = ""
+    claude_embedding_model_id: str = ""
     embedding_provider: str = "bedrock"  # "bedrock" or "local"
 
     # RAG Configuration

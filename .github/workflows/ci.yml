@@ -99,6 +99,7 @@ jobs:
           docker compose build ingestion-consumer
           docker compose build anomaly-detection
           docker compose build diagnosis-service
+          docker compose build alert-receiver
 
       - name: Verify images exist
         run: |
@@ -144,6 +145,8 @@ jobs:
           sleep 3
           PYTHONPATH=. uv run python -m services.anomaly_detection.app.main &
           sleep 3
+          PYTHONPATH=. uv run uvicorn services.alert_receiver.app.main:app --port 9096 &
+          sleep 3
           # Skip diagnosis service in CI (requires LLM credentials)
           
           # Wait for API to be ready
@@ -167,4 +170,5 @@ jobs:
           pkill -f "uvicorn" || true
           pkill -f "services.ingestion_consumer" || true
           pkill -f "services.anomaly_detection" || true
+          pkill -f "services.alert_receiver" || true
 

@@ -1,5 +1,6 @@
 # ============================================================
-# Prometheus scrape configuration
+# Prometheus scrape configuration — LOCAL DEVELOPMENT
+# Services run on host machine, scraped via host.docker.internal
 # ============================================================
 
 global:
@@ -11,7 +12,6 @@ rule_files:
   - /etc/prometheus/alert_rules.yml
   - /etc/prometheus/custom_rules/custom_rules.yml
 
-# --- Alertmanager integration --------------------------------
 alerting:
   alertmanagers:
     - static_configs:
@@ -21,30 +21,30 @@ alerting:
 scrape_configs:
   - job_name: "api-gateway"
     static_configs:
-      - targets: ["api-gateway:8000"]
+      - targets: ["host.docker.internal:8000"]
         labels:
           service: "api-gateway"
 
   - job_name: "ingestion-consumer"
     static_configs:
-      - targets: ["ingestion-consumer:9090"]
+      - targets: ["host.docker.internal:9090"]
         labels:
           service: "ingestion-consumer"
 
   - job_name: "anomaly-detection"
     static_configs:
-      - targets: ["anomaly-detection:9091"]
+      - targets: ["host.docker.internal:9091"]
         labels:
           service: "anomaly-detection"
 
   - job_name: "diagnosis-service"
     static_configs:
-      - targets: ["diagnosis-service:9092"]
+      - targets: ["host.docker.internal:9092"]
         labels:
           service: "diagnosis-service"
 
   - job_name: "alert-receiver"
     static_configs:
-      - targets: ["alert-receiver:9097"]
+      - targets: ["host.docker.internal:9097"]
         labels:
           service: "alert-receiver"

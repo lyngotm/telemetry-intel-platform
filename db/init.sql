@@ -133,3 +133,55 @@ CREATE TABLE IF NOT EXISTS incidents_knowledge (
 CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents_knowledge(severity);
 CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents_knowledge(failure_category);
 
+
+-- ============================================================
+-- ALERT EVENTS TABLE
+-- Stores alert state transitions received from Alertmanager webhook.
+-- Used by the Alert Receiver service for persistence and triage.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS alert_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    alert_name      VARCHAR(255) NOT NULL,
+    status          VARCHAR(20) NOT NULL CHECK (status IN ('firing', 'resolved')),
+    severity        VARCHAR(20) NOT NULL CHECK (severity IN ('critical', 'warning', 'info', 'unknown')),
+    pipeline        VARCHAR(100) NOT NULL DEFAULT 'unknown',
+    tier            VARCHAR(50) NOT NULL DEFAULT 'unknown',
+    labels          JSONB NOT NULL DEFAULT '{}',
+    annotations     JSONB NOT NULL DEFAULT '{}',
+    fingerprint     VARCHAR(255) NOT NULL,
+    started_at      TIMESTAMPTZ NOT NULL,
+    resolved_at     TIMESTAMPTZ,
+    generator_url   TEXT DEFAULT '',
+    triage_summary  TEXT,
+    received_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Partial unique index: only one firing alert per fingerprint at a time
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_events_fingerprint_firing
+    ON alert_events (fingerprint) WHERE status = 'firing';
+
+-- Query patterns: filter by status/severity/pipeline, order by received_at
+CREATE INDEX IF NOT EXISTS idx_alert_events_status ON alert_events(status);
+CREATE INDEX IF NOT EXISTS idx_alert_events_severity ON alert_events(severity);
+CREATE INDEX IF NOT EXISTS idx_alert_events_pipeline ON alert_events(pipeline);
+CREATE INDEX IF NOT EXISTS idx_alert_events_received_at ON alert_events(received_at DESC);
+
+-- ============================================================
+-- MONITORS TABLE
+-- Stores user-created custom alert rules (Monitor CRUD API).
+-- These are synced to monitoring/custom_rules.yml for Prometheus.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS monitors (
+    id          VARCHAR(8) PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    expr        TEXT NOT NULL,
+    duration    VARCHAR(20) NOT NULL DEFAULT '5m',
+    severity    VARCHAR(20) NOT NULL DEFAULT 'warning' CHECK (severity IN ('critical', 'warning', 'info')),
+    pipeline    VARCHAR(100) NOT NULL DEFAULT 'custom',
+    summary     TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    enabled     BOOLEAN NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_monitors_enabled ON monitors(enabled);

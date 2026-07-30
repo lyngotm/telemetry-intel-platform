@@ -1,0 +1,472 @@
+# ============================================================
+# Prometheus Alert Rules — Telemetry Intelligence Platform
+# ============================================================
+# Tiered alerting: critical (page), warning (notify), info (log).
+# Compound alerts use recording rules from recording_rules.yml.
+#
+# Labels:
+#   severity: critical | warning | info
+#   tier: platform | product
+#   pipeline: ingestion | detection | diagnosis | api
+#
+# Annotations:
+#   summary: One-line human-readable description
+#   description: Detailed context with template variables
+#   runbook_url: Link to runbook (placeholder)
+#   dashboard_url: Link to relevant Grafana dashboard
+# ============================================================
+
+groups:
+  # ============================================================
+  # CRITICAL — Page immediately (PagerDuty + webhook)
+  # ============================================================
+  - name: tip_critical
+    rules:
+      # -- Service Health --------------------------------------
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: "{{ $labels.job }}"
+        annotations:
+          summary: "Service {{ $labels.job }} is DOWN"
+          description: |
+            The service {{ $labels.job }} ({{ $labels.instance }}) has been
+            unreachable by Prometheus for more than 1 minute.
+            This means the /metrics endpoint is not responding.
+          runbook_url: "https://wiki.internal/runbooks/service-down"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+      # -- Ingestion Pipeline Stalled --------------------------
+      - alert: IngestionPipelineStalled
+        expr: sum(tip:ingestion:rate5m) == 0
+        for: 5m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: ingestion
+        annotations:
+          summary: "Ingestion pipeline has stalled — zero events for 5 minutes"
+          description: |
+            No telemetry events have been ingested in the last 5 minutes.
+            This could indicate: Kafka consumer failure, upstream producer
+            outage, or database connection pool exhaustion.
+            Current rate: {{ $value }} events/sec.
+          runbook_url: "https://wiki.internal/runbooks/ingestion-stalled"
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
+
+      # -- Critical Anomaly Burst ------------------------------
+      - alert: CriticalAnomalyBurst
+        expr: sum(rate(anomalies_detected_total{severity="critical"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          tier: product
+          pipeline: detection
+        annotations:
+          summary: "Burst of critical anomalies detected ({{ $value | printf \"%.2f\" }}/sec)"
+          description: |
+            More than 0.1 critical anomalies per second sustained for 2 minutes.
+            This indicates a serious system-wide issue affecting monitored devices.
+            Immediate investigation required.
+          runbook_url: "https://wiki.internal/runbooks/anomaly-burst"
+          dashboard_url: "http://localhost:3000/d/tip-anomaly-detection"
+
+      # -- Diagnosis Pipeline Completely Failed ----------------
+      - alert: DiagnosisPipelineDown
+        expr: |
+          tip:diagnosis_failure_ratio:rate5m > 0.9
+          and
+          (sum(rate(diagnoses_failed_total[5m])) + sum(rate(diagnoses_generated_total[5m]))) > 0
+        for: 5m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: diagnosis
+        annotations:
+          summary: "Diagnosis pipeline failure rate is {{ $value | printf \"%.0f\" }}%"
+          description: |
+            More than 90% of diagnosis attempts are failing for 5+ minutes.
+            The system is detecting anomalies but cannot generate root-cause
+            analysis. Check LLM connectivity, ChromaDB health, and PostgreSQL.
+          runbook_url: "https://wiki.internal/runbooks/diagnosis-failure"
+          dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
+
+      # -- Alert Receiver Down (meta-alert) --------------------
+      - alert: AlertReceiverDown
+        expr: up{job="alert-receiver"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: alerting
+        annotations:
+          summary: "Alert receiver service is DOWN — alert delivery broken"
+          description: |
+            The webhook alert receiver is unreachable. Alerts are firing but
+            cannot be persisted or forwarded. This is a meta-alert: the
+            alerting pipeline itself is degraded.
+          runbook_url: "https://wiki.internal/runbooks/alert-receiver-down"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+  # ============================================================
+  # WARNING — Notify (webhook only, don't wake anyone)
+  # ============================================================
+  - name: tip_warning
+    rules:
+      # -- High API Error Rate ---------------------------------
+      - alert: HighAPIErrorRate
+        expr: job:http_error_ratio_5xx:rate5m{job="api-gateway"} > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: api
+        annotations:
+          summary: "API 5xx error rate is {{ $value | printf \"%.1f\" }}% (threshold: 5%)"
+          description: |
+            The API gateway is returning server errors at a rate exceeding 5%
+            of total requests for 5+ minutes. Check application logs and
+            downstream dependencies (PostgreSQL, Redis, Kafka).
+          runbook_url: "https://wiki.internal/runbooks/api-errors"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+      # -- High API Latency ------------------------------------
+      - alert: HighAPILatency
+        expr: |
+          job:http_latency_p95:rate5m{job="api-gateway"} > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: api
+        annotations:
+          summary: "API p95 latency is {{ $value | printf \"%.2f\" }}s (threshold: 2s)"
+          description: |
+            The 95th percentile response time for the API gateway has exceeded
+            2 seconds for 5+ minutes. Users will experience degraded performance.
+            Check database query times and Redis cache hit rates.
+          runbook_url: "https://wiki.internal/runbooks/api-latency"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+      # -- DLQ Accumulation ------------------------------------
+      - alert: DLQAccumulating
+        expr: tip:dlq_total:rate5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: ingestion
+        annotations:
+          summary: "Dead-letter queue accumulating at {{ $value | printf \"%.3f\" }} events/sec"
+          description: |
+            Events are being routed to the dead-letter queue at a sustained rate.
+            This means telemetry validation is failing. Check the DLQ reason
+            breakdown: {{ with query "sum(rate(telemetry_events_dlq_total[5m])) by (reason)" }}{{ . }}{{ end }}
+          runbook_url: "https://wiki.internal/runbooks/dlq-accumulation"
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
+
+      # -- Slow Diagnosis Generation ---------------------------
+      - alert: SlowDiagnosisGeneration
+        expr: tip:diagnosis_latency_p95:rate5m > 60
+        for: 5m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: diagnosis
+        annotations:
+          summary: "Diagnosis p95 latency is {{ $value | printf \"%.0f\" }}s (threshold: 60s)"
+          description: |
+            The RAG diagnosis pipeline is taking over 60 seconds at the 95th
+            percentile. This may indicate LLM throttling, ChromaDB performance
+            issues, or large context windows. Diagnoses will still complete
+            but users will wait longer.
+          runbook_url: "https://wiki.internal/runbooks/diagnosis-latency"
+          dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
+
+      # -- High Anomaly Detection Rate -------------------------
+      - alert: HighAnomalyRate
+        expr: tip:anomalies_total:rate5m > 0.033
+        for: 5m
+        labels:
+          severity: warning
+          tier: product
+          pipeline: detection
+        annotations:
+          summary: "Anomaly rate elevated: {{ $value | printf \"%.3f\" }}/sec (>10 per 5min)"
+          description: |
+            More than ~10 anomalies are being detected per 5-minute window
+            across all severities. This could indicate widespread device issues,
+            environmental changes, or detector miscalibration.
+          runbook_url: "https://wiki.internal/runbooks/anomaly-rate-high"
+          dashboard_url: "http://localhost:3000/d/tip-anomaly-detection"
+
+      # -- Kafka Publish Errors --------------------------------
+      - alert: KafkaPublishErrors
+        expr: tip:kafka_errors_total:rate5m > 0
+        for: 3m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: ingestion
+        annotations:
+          summary: "Kafka publish errors occurring ({{ $value | printf \"%.3f\" }}/sec)"
+          description: |
+            The API gateway is failing to publish events to Kafka.
+            Error types: {{ with query "sum(rate(kafka_publish_errors_total[5m])) by (error_type)" }}{{ . }}{{ end }}
+            Events may be lost if this persists.
+          runbook_url: "https://wiki.internal/runbooks/kafka-errors"
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
+
+      # -- High Memory Usage -----------------------------------
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes > 512 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: "{{ $labels.job }}"
+        annotations:
+          summary: "{{ $labels.job }} memory usage is {{ $value | humanize1024 }}B"
+          description: |
+            Process RSS memory for {{ $labels.job }} has exceeded 512MB for
+            10+ minutes. This may indicate a memory leak or need for resource
+            limit adjustment.
+          runbook_url: "https://wiki.internal/runbooks/memory-high"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+      # -- Diagnosis Partial Failures --------------------------
+      - alert: DiagnosisPartialFailures
+        expr: tip:diagnosis_failure_ratio:rate5m > 0.25
+        for: 10m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: diagnosis
+        annotations:
+          summary: "Diagnosis failure rate is {{ $value | printf \"%.0f\" }}% (threshold: 25%)"
+          description: |
+            More than 25% of diagnosis attempts are failing. Failing phases:
+            {{ with query "sum(rate(diagnoses_failed_total[5m])) by (phase)" }}{{ . }}{{ end }}
+            The system is partially degraded but still generating some diagnoses.
+          runbook_url: "https://wiki.internal/runbooks/diagnosis-partial-failure"
+          dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
+
+  # ============================================================
+  # INFO — Log/record only (observability, no notification)
+  # ============================================================
+  - name: tip_info
+    rules:
+      # -- Anomaly Detection Active ----------------------------
+      - alert: AnomaliesBeingDetected
+        expr: tip:anomalies_total:rate5m > 0
+        for: 1m
+        labels:
+          severity: info
+          tier: product
+          pipeline: detection
+        annotations:
+          summary: "Anomalies being detected at {{ $value | printf \"%.3f\" }}/sec"
+          description: |
+            The anomaly detection system is actively flagging events.
+            Breakdown by severity:
+            Critical: {{ with query "sum(rate(anomalies_detected_total{severity='critical'}[5m]))" }}{{ . }}{{ end }}
+            High: {{ with query "sum(rate(anomalies_detected_total{severity='high'}[5m]))" }}{{ . }}{{ end }}
+            Medium: {{ with query "sum(rate(anomalies_detected_total{severity='medium'}[5m]))" }}{{ . }}{{ end }}
+            Low: {{ with query "sum(rate(anomalies_detected_total{severity='low'}[5m]))" }}{{ . }}{{ end }}
+          dashboard_url: "http://localhost:3000/d/tip-anomaly-detection"
+
+      # -- DLQ Non-Zero ----------------------------------------
+      - alert: DLQEventsPresent
+        expr: tip:dlq_total:rate5m > 0
+        for: 1m
+        labels:
+          severity: info
+          tier: platform
+          pipeline: ingestion
+        annotations:
+          summary: "Dead-letter queue is receiving events"
+          description: |
+            Events are being routed to the DLQ. This is expected during
+            normal operation at low rates but should be monitored for trends.
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
+
+      # -- High Client Error Rate (4xx) ------------------------
+      - alert: HighClientErrorRate
+        expr: job:http_errors_4xx:rate5m{job="api-gateway"} > 1
+        for: 5m
+        labels:
+          severity: info
+          tier: platform
+          pipeline: api
+        annotations:
+          summary: "Elevated client error rate: {{ $value | printf \"%.2f\" }}/sec"
+          description: |
+            High rate of 4xx responses from the API gateway. This could indicate
+            client misconfiguration, expired tokens, or rate limiting being hit.
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+  # ============================================================
+  # COMPOUND ALERTS — Multi-condition (the differentiator)
+  # ============================================================
+  - name: tip_compound
+    rules:
+      # -- Ingestion-to-Detection Pipeline Degradation ---------
+      # Fires when ingestion drops >50% AND detection drops >80%
+      # This distinguishes "fewer events" from "pipeline broken"
+      - alert: PipelineDegradation
+        expr: |
+          (tip:ingestion_rate_vs_baseline:ratio < 0.5)
+          and
+          (tip:detection_rate_vs_baseline:ratio < 0.2)
+        for: 5m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: detection
+          compound: "true"
+        annotations:
+          summary: "Pipeline degradation: ingestion down {{ $value | printf \"%.0f\" }}%, detection down >80%"
+          description: |
+            COMPOUND CONDITION MET:
+            1. Ingestion rate has dropped >50% compared to 15 minutes ago
+            2. Anomaly detection rate has dropped >80% compared to 15 minutes ago
+
+            This strongly indicates a pipeline break between ingestion and
+            detection — not simply fewer incoming events. Check Kafka consumer
+            lag, enriched topic health, and anomaly detection service logs.
+          runbook_url: "https://wiki.internal/runbooks/pipeline-degradation"
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
+
+      # -- Cascading Failure Detection -------------------------
+      # A service goes down AND downstream services show error spikes
+      - alert: CascadingFailure
+        expr: |
+          (
+            up{job="ingestion-consumer"} == 0
+            or
+            up{job="anomaly-detection"} == 0
+          )
+          and on()
+          (
+            job:http_error_ratio_5xx:rate5m{job="api-gateway"} > 0.1
+          )
+        for: 2m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: ingestion
+          compound: "true"
+        annotations:
+          summary: "Cascading failure: backend service down AND API errors spiking"
+          description: |
+            COMPOUND CONDITION MET:
+            1. A backend consumer service (ingestion-consumer or anomaly-detection) is DOWN
+            2. The API gateway 5xx error rate has spiked above 10%
+
+            This indicates a cascading failure pattern where a backend outage
+            is propagating errors to the user-facing API.
+          runbook_url: "https://wiki.internal/runbooks/cascading-failure"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+      # -- Kafka Errors + Ingestion Drop -----------------------
+      # Kafka publish failures coinciding with ingestion throughput drop
+      - alert: KafkaIngestionFailure
+        expr: |
+          (tip:kafka_errors_total:rate5m > 0.01)
+          and on()
+          (tip:ingestion_rate_vs_baseline:ratio < 0.5)
+        for: 3m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: ingestion
+          compound: "true"
+        annotations:
+          summary: "Kafka errors causing ingestion drop"
+          description: |
+            COMPOUND CONDITION MET:
+            1. Kafka publish errors are occurring at {{ $value | printf "%.3f" }}/sec
+            2. Ingestion rate has dropped >50% compared to baseline
+
+            Events are being lost because Kafka is unavailable or unhealthy.
+            Check Kafka broker health, topic availability, and network connectivity.
+          runbook_url: "https://wiki.internal/runbooks/kafka-ingestion-failure"
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
+
+      # -- High Anomaly Rate + Diagnosis Failures --------------
+      # System detecting problems but can't diagnose them
+      - alert: DetectionWithoutDiagnosis
+        expr: |
+          (tip:anomalies_critical_high:rate5m > 0.01)
+          and on()
+          (tip:diagnosis_failure_ratio:rate5m > 0.5)
+        for: 5m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: diagnosis
+          compound: "true"
+        annotations:
+          summary: "Critical anomalies detected but diagnosis pipeline is >50% failing"
+          description: |
+            COMPOUND CONDITION MET:
+            1. Critical/high anomalies are being detected at {{ $value | printf "%.3f" }}/sec
+            2. The diagnosis pipeline failure rate exceeds 50%
+
+            The system is identifying serious problems but cannot generate
+            root-cause analysis. Operators are flying blind on critical issues.
+            Check LLM service, ChromaDB, and diagnosis service logs immediately.
+          runbook_url: "https://wiki.internal/runbooks/detection-without-diagnosis"
+          dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
+
+      # -- Full Pipeline Stall ---------------------------------
+      # Nothing flowing through the entire pipeline
+      - alert: FullPipelineStall
+        expr: |
+          (sum(tip:ingestion:rate5m) == 0)
+          and on()
+          (sum(tip:events_analyzed:rate5m) == 0)
+          and on()
+          (up{job="api-gateway"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+          tier: platform
+          pipeline: ingestion
+          compound: "true"
+        annotations:
+          summary: "Complete pipeline stall — API is up but no data flowing"
+          description: |
+            COMPOUND CONDITION MET:
+            1. Zero ingestion throughput for 5+ minutes
+            2. Zero events being analyzed for 5+ minutes
+            3. API gateway is UP and reachable
+
+            The API is accepting connections but no telemetry data is flowing
+            through the pipeline. This points to Kafka connectivity issues,
+            consumer group problems, or all producers being offline.
+          runbook_url: "https://wiki.internal/runbooks/full-pipeline-stall"
+          dashboard_url: "http://localhost:3000/d/tip-system-overview"
+
+      # -- DLQ Ratio Spike -------------------------------------
+      # High percentage of incoming events going to DLQ
+      - alert: DLQRatioSpike
+        expr: tip:dlq_ratio:rate5m > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          tier: platform
+          pipeline: ingestion
+          compound: "true"
+        annotations:
+          summary: "{{ $value | printf \"%.0f\" }}% of incoming events are going to DLQ"
+          description: |
+            More than 10% of all incoming telemetry events are failing
+            validation and being routed to the dead-letter queue. This
+            suggests a systematic issue with incoming data quality —
+            possibly a misconfigured producer or schema change.
+          runbook_url: "https://wiki.internal/runbooks/dlq-ratio-spike"
+          dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"

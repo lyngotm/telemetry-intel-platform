@@ -118,17 +118,20 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: tip-prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - custom_rules:/etc/prometheus/custom_rules
       - prometheus_data:/prometheus
     ports:
       - "9094:9090"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=7d"
-    depends_on:
-      api-gateway:
-        condition: service_healthy
+      - "--web.enable-lifecycle"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 10s
@@ -151,6 +154,66 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
+
+  # --- Alertmanager ---
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: tip-alertmanager
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9095:9093"
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:9095"
+    environment:
+      PAGERDUTY_ROUTING_KEY: ${PAGERDUTY_ROUTING_KEY:-}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- Alert Receiver (Webhook Sink) ---
+  alert-receiver:
+    build:
+      context: .
+      dockerfile: services/alert_receiver/Dockerfile
+    container_name: tip-alert-receiver
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-telemetry_pass}
+      API_PORT: 8000
+      METRICS_PORT: 9097
+      TRIAGE_ENABLED: "true"
+      PROMETHEUS_URL: "http://prometheus:9090"
+      CLAUDE_MODEL_ID: ${CLAUDE_MODEL_ID:-}
+      AWS_REGION: ${AWS_REGION:-us-east-2}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      LOG_LEVEL: INFO
+    ports:
+      - "9096:8000"
+      - "9097:9097"
+    volumes:
+      - custom_rules:/etc/prometheus/custom_rules
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
 
   # ============================================================
   # APPLICATION SERVICES
@@ -308,7 +371,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
-      AWS_REGION: ${AWS_REGION:-us-west-2}
+      AWS_REGION: ${AWS_REGION:-us-east-2}
       CLAUDE_MODEL_ID: ${CLAUDE_MODEL_ID}
       CLAUDE_EMBEDDING_MODEL_ID: ${CLAUDE_EMBEDDING_MODEL_ID}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
@@ -340,5 +403,6 @@ volumes:
   prometheus_data:
   grafana_data:
   chroma_data:
+  custom_rules:
 
   

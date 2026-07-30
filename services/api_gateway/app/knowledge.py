@@ -76,7 +76,7 @@ def _generate_embeddings(texts: list[str]) -> list[list[float]]:
     # Bedrock Cohere Embed v4
     client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
     response = client.invoke_model(
-        modelId=settings.bedrock_embedding_model_id,
+        modelId=settings.claude_embedding_model_id,
         contentType="application/json",
         accept="application/json",
         body=json.dumps(
@@ -112,7 +112,7 @@ def _generate_query_embedding(text: str) -> list[float]:
 
     client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
     response = client.invoke_model(
-        modelId=settings.bedrock_embedding_model_id,
+        modelId=settings.claude_embedding_model_id,
         contentType="application/json",
         accept="application/json",
         body=json.dumps(
