@@ -35,7 +35,11 @@ async def upsert_alert_event(
 
     # Parse Alertmanager timestamps
     started_at = _parse_alertmanager_timestamp(alert.startsAt)
-    resolved_at = _parse_alertmanager_timestamp(alert.endsAt) if alert.status == AlertStatus.resolved else None
+    resolved_at = (
+        _parse_alertmanager_timestamp(alert.endsAt)
+        if alert.status == AlertStatus.resolved
+        else None
+    )
 
     # Check for "zero time" which Alertmanager uses for "not resolved"
     if resolved_at and resolved_at.year == 1:

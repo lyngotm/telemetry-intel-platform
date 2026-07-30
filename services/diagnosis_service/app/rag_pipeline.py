@@ -87,7 +87,7 @@ def _generate_query_embedding(text: str) -> list[float]:
     client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
 
     response = client.invoke_model(
-        modelId=settings.bedrock_embedding_model_id,
+        modelId=settings.claude_embedding_model_id,
         contentType="application/json",
         accept="application/json",
         body=json.dumps(
@@ -185,7 +185,7 @@ def _call_llm(system_prompt: str, user_prompt: str) -> str:
     client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
 
     response = client.converse(
-        modelId=settings.bedrock_model_id,
+        modelId=settings.claude_model_id,
         messages=[
             {
                 "role": "user",

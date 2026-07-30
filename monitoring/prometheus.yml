@@ -11,7 +11,7 @@ rule_files:
   - /etc/prometheus/alert_rules.yml
   - /etc/prometheus/custom_rules/custom_rules.yml
 
-# ─── Alertmanager integration ────────────────────────────────
+# --- Alertmanager integration --------------------------------
 alerting:
   alertmanagers:
     - static_configs:

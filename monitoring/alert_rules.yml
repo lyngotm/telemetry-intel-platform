@@ -17,12 +17,12 @@
 # ============================================================
 
 groups:
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   # CRITICAL — Page immediately (PagerDuty + webhook)
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   - name: tip_critical
     rules:
-      # ── Service Health ──────────────────────────────────────
+      # -- Service Health --------------------------------------
       - alert: ServiceDown
         expr: up == 0
         for: 1m
@@ -39,7 +39,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/service-down"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-      # ── Ingestion Pipeline Stalled ──────────────────────────
+      # -- Ingestion Pipeline Stalled --------------------------
       - alert: IngestionPipelineStalled
         expr: sum(tip:ingestion:rate5m) == 0
         for: 5m
@@ -57,7 +57,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/ingestion-stalled"
           dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
 
-      # ── Critical Anomaly Burst ──────────────────────────────
+      # -- Critical Anomaly Burst ------------------------------
       - alert: CriticalAnomalyBurst
         expr: sum(rate(anomalies_detected_total{severity="critical"}[5m])) > 0.1
         for: 2m
@@ -74,7 +74,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/anomaly-burst"
           dashboard_url: "http://localhost:3000/d/tip-anomaly-detection"
 
-      # ── Diagnosis Pipeline Completely Failed ────────────────
+      # -- Diagnosis Pipeline Completely Failed ----------------
       - alert: DiagnosisPipelineDown
         expr: |
           tip:diagnosis_failure_ratio:rate5m > 0.9
@@ -94,7 +94,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/diagnosis-failure"
           dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
 
-      # ── Alert Receiver Down (meta-alert) ────────────────────
+      # -- Alert Receiver Down (meta-alert) --------------------
       - alert: AlertReceiverDown
         expr: up{job="alert-receiver"} == 0
         for: 1m
@@ -111,12 +111,12 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/alert-receiver-down"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   # WARNING — Notify (webhook only, don't wake anyone)
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   - name: tip_warning
     rules:
-      # ── High API Error Rate ─────────────────────────────────
+      # -- High API Error Rate ---------------------------------
       - alert: HighAPIErrorRate
         expr: job:http_error_ratio_5xx:rate5m{job="api-gateway"} > 0.05
         for: 5m
@@ -133,7 +133,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/api-errors"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-      # ── High API Latency ────────────────────────────────────
+      # -- High API Latency ------------------------------------
       - alert: HighAPILatency
         expr: |
           job:http_latency_p95:rate5m{job="api-gateway"} > 2.0
@@ -151,7 +151,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/api-latency"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-      # ── DLQ Accumulation ────────────────────────────────────
+      # -- DLQ Accumulation ------------------------------------
       - alert: DLQAccumulating
         expr: tip:dlq_total:rate5m > 0.05
         for: 5m
@@ -168,7 +168,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/dlq-accumulation"
           dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
 
-      # ── Slow Diagnosis Generation ───────────────────────────
+      # -- Slow Diagnosis Generation ---------------------------
       - alert: SlowDiagnosisGeneration
         expr: tip:diagnosis_latency_p95:rate5m > 60
         for: 5m
@@ -186,7 +186,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/diagnosis-latency"
           dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
 
-      # ── High Anomaly Detection Rate ─────────────────────────
+      # -- High Anomaly Detection Rate -------------------------
       - alert: HighAnomalyRate
         expr: tip:anomalies_total:rate5m > 0.033
         for: 5m
@@ -203,7 +203,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/anomaly-rate-high"
           dashboard_url: "http://localhost:3000/d/tip-anomaly-detection"
 
-      # ── Kafka Publish Errors ────────────────────────────────
+      # -- Kafka Publish Errors --------------------------------
       - alert: KafkaPublishErrors
         expr: tip:kafka_errors_total:rate5m > 0
         for: 3m
@@ -220,7 +220,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/kafka-errors"
           dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
 
-      # ── High Memory Usage ───────────────────────────────────
+      # -- High Memory Usage -----------------------------------
       - alert: HighMemoryUsage
         expr: process_resident_memory_bytes > 512 * 1024 * 1024
         for: 10m
@@ -237,7 +237,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/memory-high"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-      # ── Diagnosis Partial Failures ──────────────────────────
+      # -- Diagnosis Partial Failures --------------------------
       - alert: DiagnosisPartialFailures
         expr: tip:diagnosis_failure_ratio:rate5m > 0.25
         for: 10m
@@ -254,12 +254,12 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/diagnosis-partial-failure"
           dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
 
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   # INFO — Log/record only (observability, no notification)
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   - name: tip_info
     rules:
-      # ── Anomaly Detection Active ────────────────────────────
+      # -- Anomaly Detection Active ----------------------------
       - alert: AnomaliesBeingDetected
         expr: tip:anomalies_total:rate5m > 0
         for: 1m
@@ -278,7 +278,7 @@ groups:
             Low: {{ with query "sum(rate(anomalies_detected_total{severity='low'}[5m]))" }}{{ . }}{{ end }}
           dashboard_url: "http://localhost:3000/d/tip-anomaly-detection"
 
-      # ── DLQ Non-Zero ────────────────────────────────────────
+      # -- DLQ Non-Zero ----------------------------------------
       - alert: DLQEventsPresent
         expr: tip:dlq_total:rate5m > 0
         for: 1m
@@ -293,7 +293,7 @@ groups:
             normal operation at low rates but should be monitored for trends.
           dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
 
-      # ── High Client Error Rate (4xx) ────────────────────────
+      # -- High Client Error Rate (4xx) ------------------------
       - alert: HighClientErrorRate
         expr: job:http_errors_4xx:rate5m{job="api-gateway"} > 1
         for: 5m
@@ -308,12 +308,12 @@ groups:
             client misconfiguration, expired tokens, or rate limiting being hit.
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   # COMPOUND ALERTS — Multi-condition (the differentiator)
-  # ════════════════════════════════════════════════════════════
+  # ============================================================
   - name: tip_compound
     rules:
-      # ── Ingestion-to-Detection Pipeline Degradation ─────────
+      # -- Ingestion-to-Detection Pipeline Degradation ---------
       # Fires when ingestion drops >50% AND detection drops >80%
       # This distinguishes "fewer events" from "pipeline broken"
       - alert: PipelineDegradation
@@ -340,7 +340,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/pipeline-degradation"
           dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
 
-      # ── Cascading Failure Detection ─────────────────────────
+      # -- Cascading Failure Detection -------------------------
       # A service goes down AND downstream services show error spikes
       - alert: CascadingFailure
         expr: |
@@ -371,7 +371,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/cascading-failure"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-      # ── Kafka Errors + Ingestion Drop ───────────────────────
+      # -- Kafka Errors + Ingestion Drop -----------------------
       # Kafka publish failures coinciding with ingestion throughput drop
       - alert: KafkaIngestionFailure
         expr: |
@@ -396,7 +396,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/kafka-ingestion-failure"
           dashboard_url: "http://localhost:3000/d/tip-ingestion-pipeline"
 
-      # ── High Anomaly Rate + Diagnosis Failures ──────────────
+      # -- High Anomaly Rate + Diagnosis Failures --------------
       # System detecting problems but can't diagnose them
       - alert: DetectionWithoutDiagnosis
         expr: |
@@ -422,7 +422,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/detection-without-diagnosis"
           dashboard_url: "http://localhost:3000/d/tip-diagnosis-service"
 
-      # ── Full Pipeline Stall ─────────────────────────────────
+      # -- Full Pipeline Stall ---------------------------------
       # Nothing flowing through the entire pipeline
       - alert: FullPipelineStall
         expr: |
@@ -451,7 +451,7 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/full-pipeline-stall"
           dashboard_url: "http://localhost:3000/d/tip-system-overview"
 
-      # ── DLQ Ratio Spike ─────────────────────────────────────
+      # -- DLQ Ratio Spike -------------------------------------
       # High percentage of incoming events going to DLQ
       - alert: DLQRatioSpike
         expr: tip:dlq_ratio:rate5m > 0.1

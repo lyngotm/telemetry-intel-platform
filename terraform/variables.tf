@@ -7,7 +7,7 @@
 variable "aws_region" {
   description = "AWS region to deploy into"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-2"
 }
 
 variable "project_name" {
@@ -33,7 +33,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "List of availability zones to use"
   type        = list(string)
-  default     = ["us-west-2a", "us-west-2b"]
+  default     = ["us-east-2a", "us-east-2b"]
 }
 
 # --- EKS ---

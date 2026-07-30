@@ -151,7 +151,7 @@ async def _triage_from_existing_diagnoses(
         f"Alert: {alert_name}",
         "Source: Existing Diagnosis Service output (last 30 minutes)",
         "",
-        "─── Root Causes Identified ───",
+        "--- Root Causes Identified ---",
     ]
 
     seen_causes = set()
@@ -174,7 +174,7 @@ async def _triage_from_existing_diagnoses(
             all_actions.extend(actions)
 
     summary_parts.append("")
-    summary_parts.append("─── Blast Radius ───")
+    summary_parts.append("--- Blast Radius ---")
     summary_parts.append(f"• Devices affected: {len(devices_affected)}")
     summary_parts.append(f"• Anomalies in last 30min: {len(rows)}")
 
@@ -182,7 +182,7 @@ async def _triage_from_existing_diagnoses(
         # Deduplicate and take top 5
         unique_actions = list(dict.fromkeys(all_actions))[:5]
         summary_parts.append("")
-        summary_parts.append("─── Recommended Actions (from diagnoses) ───")
+        summary_parts.append("--- Recommended Actions (from diagnoses) ---")
         for i, action in enumerate(unique_actions, 1):
             summary_parts.append(f"{i}. {action}")
 
@@ -259,6 +259,7 @@ async def _invoke_llm(prompt: str) -> str:
     Currently support AWS Bedrock Converse API. Can be swapped for OpenAI,
     Anthropic direct, or other providers by modifying this function.
     """
+
     def _call_llm():
         client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
         response = client.converse(
@@ -276,7 +277,8 @@ async def _invoke_llm(prompt: str) -> str:
         )
         return response["output"]["message"]["content"][0]["text"]
 
-    return await asyncio.get_event_loop().run_in_executor(None, _call_llm)
+    # Run blocking boto3 call in a thread to not block the event loop
+    return await asyncio.to_thread(_call_llm)
 
 
 # ============================================================
@@ -463,18 +465,18 @@ def _generate_rule_based_triage(alert: AlertmanagerAlert) -> str:
             f"TRIAGE: {alert_name}",
             f"Alert: {summary}",
             "",
-            "─── Likely Root Cause ───",
+            "--- Likely Root Cause ---",
             template["root_cause"],
             "",
-            "─── Investigation Steps ───",
+            "--- Investigation Steps ---",
         ]
         for i, step in enumerate(template["investigation"], 1):
             parts.append(f"{i}. {step}")
         parts.append("")
-        parts.append("─── Blast Radius ───")
+        parts.append("--- Blast Radius ---")
         parts.append(template["blast_radius"])
         parts.append("")
-        parts.append("─── Immediate Actions ───")
+        parts.append("--- Immediate Actions ---")
         for i, action in enumerate(template["actions"], 1):
             parts.append(f"{i}. {action}")
         return "\n".join(parts)
@@ -484,17 +486,17 @@ def _generate_rule_based_triage(alert: AlertmanagerAlert) -> str:
         f"TRIAGE: {alert_name}\n"
         f"Alert: {summary}\n"
         f"Pipeline: {pipeline}\n\n"
-        "─── Likely Root Cause ───\n"
+        "--- Likely Root Cause ---\n"
         f"Critical condition detected on {pipeline} pipeline. "
         "Review the alert description and annotations for specific context.\n\n"
-        "─── Investigation Steps ───\n"
+        "--- Investigation Steps ---\n"
         f"1. Check {pipeline} service logs\n"
         "2. Verify dependency connectivity (PostgreSQL, Redis, Kafka)\n"
         "3. Check related metrics in Grafana dashboards\n"
         "4. Review recent deployments or configuration changes\n\n"
-        "─── Blast Radius ───\n"
+        "--- Blast Radius ---\n"
         "Depends on pipeline scope. Check downstream service health.\n\n"
-        "─── Immediate Actions ───\n"
+        "--- Immediate Actions ---\n"
         "1. Follow runbook link in alert annotations\n"
         f"2. Check service status: docker compose ps\n"
         "3. Escalate if not resolved within 15 minutes"

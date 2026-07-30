@@ -285,7 +285,7 @@ class TestRuleBasedTriage:
             alert = self._make_alert(alert_name)
             result = _generate_rule_based_triage(alert)
             assert len(result) > 100, f"{alert_name} produced too-short triage: {len(result)} chars"
-            assert "──" in result, f"{alert_name} missing section separators"
+            assert "--" in result, f"{alert_name} missing section separators"
 
     def test_triage_has_structured_sections(self):
         """Triage output contains expected sections."""

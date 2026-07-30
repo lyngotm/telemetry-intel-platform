@@ -35,11 +35,12 @@ LOCAL_CUSTOM_RULES_PATH = Path("/tmp/tip-custom-rules/custom_rules.yml")
 PROMETHEUS_RELOAD_URL = None  # Set from settings at runtime
 
 
-# ─── Request/Response Models ──────────────────────────────────
+# --- Request/Response Models ----------------------------------
 
 
 class MonitorCreate(BaseModel):
     """Request to create a new monitor (alert rule)."""
+
     name: str = Field(..., description="Alert name (e.g., 'HighCPUUsage')", max_length=100)
     expr: str = Field(..., description="PromQL expression that triggers the alert")
     duration: str = Field(
@@ -67,6 +68,7 @@ class MonitorCreate(BaseModel):
 
 class MonitorUpdate(BaseModel):
     """Request to update an existing monitor. All fields optional."""
+
     name: str | None = Field(default=None, max_length=100)
     expr: str | None = None
     duration: str | None = None
@@ -79,6 +81,7 @@ class MonitorUpdate(BaseModel):
 
 class MonitorResponse(BaseModel):
     """A monitor as returned by the API."""
+
     id: str
     name: str
     expr: str
@@ -93,11 +96,12 @@ class MonitorResponse(BaseModel):
 
 class MonitorListResponse(BaseModel):
     """List of all configured monitors."""
+
     monitors: list[MonitorResponse]
     total: int
 
 
-# ─── Database Operations ─────────────────────────────────────
+# --- Database Operations -------------------------------------
 
 
 async def create_monitor(pool: asyncpg.Pool, monitor: MonitorCreate) -> dict:
@@ -178,9 +182,7 @@ async def list_monitors(pool: asyncpg.Pool) -> MonitorListResponse:
 async def delete_monitor(pool: asyncpg.Pool, monitor_id: str) -> dict | None:
     """Delete a monitor by ID. Returns result dict or None if not found."""
     async with pool.acquire() as conn:
-        result = await conn.execute(
-            "DELETE FROM monitors WHERE id = $1", monitor_id
-        )
+        result = await conn.execute("DELETE FROM monitors WHERE id = $1", monitor_id)
 
     if result == "DELETE 0":
         return None
@@ -190,9 +192,7 @@ async def delete_monitor(pool: asyncpg.Pool, monitor_id: str) -> dict | None:
     return {"prometheus_reload": {"success": reload_ok, "message": reload_msg}}
 
 
-async def update_monitor(
-    pool: asyncpg.Pool, monitor_id: str, update: MonitorUpdate
-) -> dict | None:
+async def update_monitor(pool: asyncpg.Pool, monitor_id: str, update: MonitorUpdate) -> dict | None:
     """
     Update a monitor's fields. Only non-None fields are updated.
     Returns dict with monitor and reload status, or None if not found.
@@ -259,7 +259,7 @@ async def get_monitor(pool: asyncpg.Pool, monitor_id: str) -> MonitorResponse | 
     )
 
 
-# ─── Rules File Generation ────────────────────────────────────
+# --- Rules File Generation ------------------------------------
 
 
 async def _sync_rules_file(pool: asyncpg.Pool) -> tuple[bool, str]:

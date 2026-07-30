@@ -24,7 +24,7 @@ global:
   # PagerDuty Events API v2 base URL (default, rarely changed)
   pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
 
-# ─── Route Tree ──────────────────────────────────────────────
+# --- Route Tree ----------------------------------------------
 route:
   # Default receiver for anything that doesn't match a child route
   receiver: webhook-all
@@ -43,7 +43,7 @@ route:
 
   # Child routes — evaluated top to bottom, first match wins
   routes:
-    # ── Critical alerts → PagerDuty + webhook ─────────────────
+    # -- Critical alerts → PagerDuty + webhook -----------------
     - receiver: pagerduty-critical
       matchers:
         - severity = "critical"
@@ -52,7 +52,7 @@ route:
       repeat_interval: 1h
       continue: true  # Also send to next matching route
 
-    # ── Critical alerts → webhook (for persistence) ───────────
+    # -- Critical alerts → webhook (for persistence) -----------
     - receiver: webhook-all
       matchers:
         - severity = "critical"
@@ -60,7 +60,7 @@ route:
       group_interval: 1m
       repeat_interval: 1h
 
-    # ── Warning alerts → webhook only ─────────────────────────
+    # -- Warning alerts → webhook only -------------------------
     - receiver: webhook-all
       matchers:
         - severity = "warning"
@@ -68,7 +68,7 @@ route:
       group_interval: 5m
       repeat_interval: 4h
 
-    # ── Info alerts → webhook only (less aggressive timing) ───
+    # -- Info alerts → webhook only (less aggressive timing) ---
     - receiver: webhook-all
       matchers:
         - severity = "info"
@@ -76,7 +76,7 @@ route:
       group_interval: 10m
       repeat_interval: 12h
 
-    # ── Compound alerts → dedicated routing ───────────────────
+    # -- Compound alerts → dedicated routing -------------------
     # Compound alerts are already critical/warning, but we can
     # add specific handling if needed in the future
     - receiver: webhook-all
@@ -86,7 +86,7 @@ route:
       group_interval: 1m
       repeat_interval: 2h
 
-# ─── Inhibition Rules ────────────────────────────────────────
+# --- Inhibition Rules ----------------------------------------
 # Suppress noisy downstream alerts when the root cause is known.
 inhibit_rules:
   # If a service is DOWN (critical), suppress all warnings for that service.
@@ -138,9 +138,9 @@ inhibit_rules:
       - severity = "info"
     equal: ["pipeline"]
 
-# ─── Receivers ───────────────────────────────────────────────
+# --- Receivers -----------------------------------------------
 receivers:
-  # ── PagerDuty (critical alerts only) ────────────────────────
+  # -- PagerDuty (critical alerts only) ------------------------
   # Uses Events API v2 for rich alert context.
   # The routing_key comes from PagerDuty service integration.
   #
@@ -169,7 +169,7 @@ receivers:
         # Auto-resolve in PagerDuty when alert resolves in Prometheus
         send_resolved: true
 
-  # ── Webhook receiver (all alerts) ──────────────────────────
+  # -- Webhook receiver (all alerts) --------------------------
   # Posts to our custom alert-receiver service for persistence
   # and optional AI triage (critical alerts trigger LLM diagnosis).
   - name: webhook-all
@@ -181,8 +181,8 @@ receivers:
           follow_redirects: true
         max_alerts: 0  # Send all alerts in one batch (no limit)
 
-  # ── Null receiver (for future silencing rules) ──────────────
+  # -- Null receiver (for future silencing rules) --------------
   - name: "null"
 
-# ─── Templates (optional, for custom notification formatting) ─
+# --- Templates (optional, for custom notification formatting) -
 templates: []

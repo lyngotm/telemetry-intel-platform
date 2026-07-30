@@ -285,3 +285,82 @@ Documenting key design decisions and their rationale as the project evolves.
 
 
 
+
+
+---
+
+## 016: Prometheus Alertmanager over Grafana Alerting
+
+**Date:** 2026-07-28
+**Status:** Accepted
+
+**Context:** The platform needs alerting capabilities. Two options: Grafana's built-in alerting (simpler, already in-stack) or a dedicated Prometheus Alertmanager (separate service, more features).
+
+**Decision:** Use Prometheus Alertmanager as the alerting backend with a custom webhook receiver for persistence.
+
+**Rationale:**
+- **Grouping/deduplication:** Alertmanager batches related alerts and prevents notification spam. Grafana alerting lacks grouping sophistication.
+- **Inhibition rules:** Alertmanager can suppress downstream alerts when the root cause is known (e.g., don't page about API errors if the backend is already known to be down). This reduces alert fatigue significantly.
+- **Routing tree:** Severity-based routing (critical→PagerDuty+webhook, warning→webhook only) is natively supported.
+- **Stateful silences:** Operators can silence alerts during maintenance windows without code changes.
+- **Industry standard:** Most Kubernetes environments use Alertmanager. The skills are transferable.
+
+**Tradeoff:** Additional service to run (Alertmanager container), more configuration files (alertmanager.yml, alert_rules.yml, recording_rules.yml), and a separate webhook receiver service to persist alert state.
+
+---
+
+## 017: Compound Alert Rules Using Recording Rules and Multi-Condition PromQL
+
+**Date:** 2026-07-28
+**Status:** Accepted
+
+**Context:** Simple threshold-based alerts (e.g., "error rate > 5%") cause false positives. Real incidents often manifest as multiple metrics changing simultaneously.
+
+**Decision:** Implement compound alerts that fire only when multiple conditions are true, using recording rules for pre-computed baselines and `and on()` PromQL joins.
+
+**Rationale:**
+- **Root cause identification:** "Ingestion dropped >50% AND detection dropped >80%" distinguishes "pipeline is broken" from "fewer events are being sent" — two completely different situations requiring different responses.
+- **Reduced false positives:** Single-metric alerts fire on transient spikes. Compound conditions require sustained multi-signal degradation.
+- **Recording rules for performance:** Complex expressions like `rate(X[5m]) / clamp_min(rate(X[5m] offset 15m), 0.001)` are expensive to evaluate every 15 seconds across multiple alert rules. Recording rules compute them once and store the result.
+
+**Tradeoff:** Compound alerts are harder to debug — if the alert doesn't fire when expected, you need to check each sub-condition independently. Recording rules add a layer of indirection. Alert rule files become larger and more complex.
+
+---
+
+## 018: Webhook Receiver as Dedicated Service (vs. Adding Endpoints to API Gateway)
+
+**Date:** 2026-07-28
+**Status:** Accepted
+
+**Context:** Alertmanager needs a webhook endpoint to deliver alerts. This could be a route on the existing API Gateway or a separate microservice.
+
+**Decision:** Create a dedicated `alert_receiver` service that receives webhooks, persists state, generates triage, and exposes the Monitor CRUD API.
+
+**Rationale:**
+- **Separation of concerns:** Alert processing has different lifecycle, scaling needs, and failure modes than the user-facing API.
+- **Independent deployability:** The alert receiver can be restarted without affecting user traffic. It can also be scaled independently if alert volume grows.
+- **Self-monitoring:** The receiver exposes its own Prometheus metrics (port 9097). If it goes down, the `AlertReceiverDown` rule fires — a clean meta-alerting pattern that would be circular if embedded in the API gateway.
+- **No auth overhead:** Alertmanager→receiver is internal traffic. Adding it to the API gateway would require auth bypass logic for the webhook path.
+
+**Tradeoff:** One more service to build, deploy, and monitor. More Docker images to maintain. Slightly more complex local development (one more terminal).
+
+---
+
+## 019: AI Triage — Reuse Existing Diagnoses for Product Alerts, Fresh LLM for Platform Alerts
+
+**Date:** 2026-07-28
+**Status:** Accepted
+
+**Context:** When a critical alert fires, operators need context fast. The Diagnosis Service already generates root-cause analysis for anomalies. Calling the LLM again for anomaly-triggered alerts would be redundant and expensive.
+
+**Decision:** Split triage strategy by alert type:
+- Product alerts (anomaly-triggered): Query existing diagnoses from PostgreSQL — no LLM call.
+- Platform alerts (ServiceDown, PipelineStalled): Invoke LLM for fresh analysis, with rule-based fallback.
+
+**Rationale:**
+- **Cost efficiency:** No duplicate LLM calls for anomaly-based alerts. The Diagnosis Service already spent the compute.
+- **Speed:** Querying PostgreSQL for existing diagnoses returns in <50ms. Calling the LLM takes 5-30s.
+- **Always works:** Rule-based fallback provides actionable triage for all 8 platform alert types without any LLM credentials. The system is useful day-one with zero cloud cost.
+- **Non-blocking:** Triage runs as `asyncio.create_task()` — the webhook responds immediately (58ms measured) regardless of triage duration.
+
+**Tradeoff:** Rule-based templates are static and can become stale. Product alert triage depends on diagnoses existing (if the diagnosis pipeline is itself failing, product alert triage returns nothing useful — but that's when the `DetectionWithoutDiagnosis` compound alert fires).

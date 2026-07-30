@@ -9,17 +9,19 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
-# ─── Alertmanager Webhook Payload Models ──────────────────────
+# --- Alertmanager Webhook Payload Models ----------------------
 
 
 class AlertStatus(str, Enum):
     """Alert lifecycle states from Alertmanager."""
+
     firing = "firing"
     resolved = "resolved"
 
 
 class AlertmanagerAlert(BaseModel):
     """A single alert within an Alertmanager webhook payload."""
+
     status: AlertStatus
     labels: dict[str, str] = Field(default_factory=dict)
     annotations: dict[str, str] = Field(default_factory=dict)
@@ -34,6 +36,7 @@ class AlertmanagerWebhookPayload(BaseModel):
     Full webhook payload sent by Alertmanager.
     See: https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
     """
+
     version: str = "4"
     groupKey: str = ""
     truncatedAlerts: int = 0
@@ -46,11 +49,12 @@ class AlertmanagerWebhookPayload(BaseModel):
     alerts: list[AlertmanagerAlert] = Field(default_factory=list)
 
 
-# ─── Database / API Response Models ──────────────────────────
+# --- Database / API Response Models --------------------------
 
 
 class AlertEventResponse(BaseModel):
     """Alert event as returned by the API."""
+
     id: UUID
     alert_name: str
     status: AlertStatus
@@ -69,6 +73,7 @@ class AlertEventResponse(BaseModel):
 
 class AlertEventListResponse(BaseModel):
     """Paginated list of alert events."""
+
     alerts: list[AlertEventResponse]
     total: int
     limit: int
@@ -77,6 +82,7 @@ class AlertEventListResponse(BaseModel):
 
 class ActiveAlertsSummary(BaseModel):
     """Summary of currently active (firing) alerts."""
+
     total_firing: int
     by_severity: dict[str, int]
     by_pipeline: dict[str, int]
@@ -85,6 +91,7 @@ class ActiveAlertsSummary(BaseModel):
 
 class AlertReceiverHealth(BaseModel):
     """Health check response."""
+
     status: str
     alerts_received_total: int
     alerts_currently_firing: int
@@ -92,6 +99,7 @@ class AlertReceiverHealth(BaseModel):
 
 class TriageResponse(BaseModel):
     """AI triage response for a specific alert."""
+
     alert_id: UUID
     alert_name: str
     severity: str

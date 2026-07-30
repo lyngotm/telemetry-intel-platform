@@ -6,7 +6,7 @@ Exposed on a separate port (9097) for Prometheus to scrape.
 from prometheus_client import Counter, Gauge, Histogram
 
 
-# ─── Alert ingestion metrics ──────────────────────────────────
+# --- Alert ingestion metrics ----------------------------------
 
 ALERT_EVENTS_RECEIVED = Counter(
     "alert_events_received_total",
@@ -26,7 +26,7 @@ ALERT_PROCESSING_ERRORS = Counter(
     ["error_type"],
 )
 
-# ─── Alert state metrics ──────────────────────────────────────
+# --- Alert state metrics --------------------------------------
 
 ALERTS_CURRENTLY_FIRING = Gauge(
     "alerts_currently_firing",
@@ -45,7 +45,7 @@ ALERTS_FIRING_BY_PIPELINE = Gauge(
     ["pipeline"],
 )
 
-# ─── Webhook delivery metrics ─────────────────────────────────
+# --- Webhook delivery metrics ---------------------------------
 
 WEBHOOK_DELIVERY_LATENCY = Histogram(
     "alert_webhook_delivery_seconds",
@@ -53,7 +53,7 @@ WEBHOOK_DELIVERY_LATENCY = Histogram(
     buckets=(0.5, 1, 2, 5, 10, 30, 60, 120, 300),
 )
 
-# ─── AI Triage metrics ───────────────────────────────────────
+# --- AI Triage metrics ---------------------------------------
 
 TRIAGE_INVOCATIONS = Counter(
     "alert_triage_invocations_total",
