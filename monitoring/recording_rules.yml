@@ -1,0 +1,194 @@
+# ============================================================
+# Prometheus Recording Rules — Telemetry Intelligence Platform
+# ============================================================
+# Pre-computed rates and ratios used by alert rules.
+# Evaluated every 15s (matches global.evaluation_interval).
+# Naming convention: level:metric:operations
+# ============================================================
+
+groups:
+  # ────────────────────────────────────────────────────────────
+  # HTTP / API Gateway metrics
+  # ────────────────────────────────────────────────────────────
+  - name: tip_http_recording_rules
+    interval: 15s
+    rules:
+      # Total request rate per service (5m smoothing)
+      - record: job:http_requests:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job)
+
+      # Request rate per endpoint (for top-endpoint analysis)
+      - record: job:http_requests_by_endpoint:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job, endpoint, method)
+
+      # 5xx error rate (server errors only)
+      - record: job:http_errors_5xx:rate5m
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job)
+
+      # 4xx error rate (client errors)
+      - record: job:http_errors_4xx:rate5m
+        expr: sum(rate(http_requests_total{status_code=~"4.."}[5m])) by (job)
+
+      # Error ratio: 5xx / total (0.0–1.0)
+      # Uses clamp to avoid division-by-zero producing NaN
+      - record: job:http_error_ratio_5xx:rate5m
+        expr: |
+          (sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])) by (job), 1)
+
+      # P95 latency per endpoint
+      - record: job:http_latency_p95:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job, endpoint)
+          )
+
+      # P99 latency (overall per service)
+      - record: job:http_latency_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)
+          )
+
+  # ────────────────────────────────────────────────────────────
+  # Ingestion Pipeline metrics
+  # ────────────────────────────────────────────────────────────
+  - name: tip_ingestion_recording_rules
+    interval: 15s
+    rules:
+      # Ingestion throughput (events/sec, 5m average)
+      - record: tip:ingestion:rate5m
+        expr: rate(telemetry_events_ingested_total[5m])
+
+      # Ingestion throughput (1m for faster alerting)
+      - record: tip:ingestion:rate1m
+        expr: rate(telemetry_events_ingested_total[1m])
+
+      # DLQ rate by reason
+      - record: tip:dlq:rate5m
+        expr: sum(rate(telemetry_events_dlq_total[5m])) by (reason)
+
+      # Total DLQ rate (all reasons)
+      - record: tip:dlq_total:rate5m
+        expr: sum(rate(telemetry_events_dlq_total[5m]))
+
+      # DLQ ratio: DLQ events / total ingested
+      - record: tip:dlq_ratio:rate5m
+        expr: |
+          sum(rate(telemetry_events_dlq_total[5m]))
+          /
+          clamp_min(rate(telemetry_events_ingested_total[5m]) + sum(rate(telemetry_events_dlq_total[5m])), 1)
+
+      # Kafka publish error rate
+      - record: tip:kafka_errors:rate5m
+        expr: sum(rate(kafka_publish_errors_total[5m])) by (error_type)
+
+      # Total Kafka errors (all types)
+      - record: tip:kafka_errors_total:rate5m
+        expr: sum(rate(kafka_publish_errors_total[5m]))
+
+  # ────────────────────────────────────────────────────────────
+  # Anomaly Detection metrics
+  # ────────────────────────────────────────────────────────────
+  - name: tip_anomaly_recording_rules
+    interval: 15s
+    rules:
+      # Anomaly detection rate by severity
+      - record: tip:anomalies:rate5m
+        expr: sum(rate(anomalies_detected_total[5m])) by (severity)
+
+      # Total anomaly rate (all severities)
+      - record: tip:anomalies_total:rate5m
+        expr: sum(rate(anomalies_detected_total[5m]))
+
+      # Critical + high anomalies rate (for paging)
+      - record: tip:anomalies_critical_high:rate5m
+        expr: sum(rate(anomalies_detected_total{severity=~"critical|high"}[5m]))
+
+      # Events analyzed rate
+      - record: tip:events_analyzed:rate5m
+        expr: rate(telemetry_events_analyzed_total[5m])
+
+      # Detection ratio: anomalies / events analyzed
+      # A spike in this ratio means the system is flagging an unusual proportion
+      - record: tip:anomaly_detection_ratio:rate5m
+        expr: |
+          sum(rate(anomalies_detected_total[5m]))
+          /
+          clamp_min(rate(telemetry_events_analyzed_total[5m]), 0.001)
+
+  # ────────────────────────────────────────────────────────────
+  # Diagnosis Service metrics
+  # ────────────────────────────────────────────────────────────
+  - name: tip_diagnosis_recording_rules
+    interval: 15s
+    rules:
+      # Diagnosis generation rate
+      - record: tip:diagnoses:rate5m
+        expr: sum(rate(diagnoses_generated_total[5m])) by (severity)
+
+      # Total diagnosis rate
+      - record: tip:diagnoses_total:rate5m
+        expr: sum(rate(diagnoses_generated_total[5m]))
+
+      # Diagnosis failure rate by phase
+      - record: tip:diagnosis_failures:rate5m
+        expr: sum(rate(diagnoses_failed_total[5m])) by (phase)
+
+      # Total diagnosis failure rate
+      - record: tip:diagnosis_failures_total:rate5m
+        expr: sum(rate(diagnoses_failed_total[5m]))
+
+      # Diagnosis failure ratio: failures / (successes + failures)
+      - record: tip:diagnosis_failure_ratio:rate5m
+        expr: |
+          sum(rate(diagnoses_failed_total[5m]))
+          /
+          clamp_min(
+            sum(rate(diagnoses_generated_total[5m])) + sum(rate(diagnoses_failed_total[5m])),
+            0.001
+          )
+
+      # Diagnosis P95 latency
+      - record: tip:diagnosis_latency_p95:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(diagnosis_generation_seconds_bucket[5m])) by (le)
+          )
+
+      # Diagnosis P99 latency
+      - record: tip:diagnosis_latency_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(diagnosis_generation_seconds_bucket[5m])) by (le)
+          )
+
+  # ────────────────────────────────────────────────────────────
+  # Compound / Cross-service metrics (used by compound alerts)
+  # ────────────────────────────────────────────────────────────
+  - name: tip_compound_recording_rules
+    interval: 15s
+    rules:
+      # Ingestion-to-detection pipeline health ratio
+      # Compares current ingestion rate to 15m ago. A value <0.5 means >50% drop.
+      - record: tip:ingestion_rate_vs_baseline:ratio
+        expr: |
+          rate(telemetry_events_ingested_total[5m])
+          /
+          clamp_min(rate(telemetry_events_ingested_total[5m] offset 15m), 0.001)
+
+      # Detection-rate change ratio (current vs 15m ago)
+      - record: tip:detection_rate_vs_baseline:ratio
+        expr: |
+          sum(rate(anomalies_detected_total[5m]))
+          /
+          clamp_min(sum(rate(anomalies_detected_total[5m] offset 15m)), 0.001)
+
+      # Pipeline throughput: ratio of events analyzed to events ingested
+      # If this drops significantly, events are being lost between ingestion and detection
+      - record: tip:pipeline_throughput_ratio:rate5m
+        expr: |
+          rate(telemetry_events_analyzed_total[5m])
+          /
+          clamp_min(rate(telemetry_events_ingested_total[5m]), 0.001)

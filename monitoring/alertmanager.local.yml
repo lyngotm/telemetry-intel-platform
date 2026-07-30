@@ -1,0 +1,188 @@
+# ============================================================
+# Alertmanager Configuration — Telemetry Intelligence Platform
+# ============================================================
+#
+# Routing strategy:
+#   critical → PagerDuty (page) + webhook receiver (persist)
+#   warning  → webhook receiver only (notify, no page)
+#   info     → webhook receiver only (record)
+#
+# Grouping: alerts grouped by alertname + service to reduce noise.
+# Inhibition: upstream failures suppress downstream alert noise.
+#
+# PagerDuty: Uses Events API v2 with routing key from env var.
+#   Set PAGERDUTY_ROUTING_KEY in .env to enable.
+#
+# ============================================================
+
+global:
+  # How long to wait before sending a notification about new alerts
+  # that are added to a group of alerts for which an initial
+  # notification has already been sent.
+  resolve_timeout: 5m
+
+  # PagerDuty Events API v2 base URL (default, rarely changed)
+  pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+
+# ─── Route Tree ──────────────────────────────────────────────
+route:
+  # Default receiver for anything that doesn't match a child route
+  receiver: webhook-all
+
+  # Group alerts by these labels — reduces notification spam
+  group_by: ["alertname", "pipeline", "severity"]
+
+  # Wait this long to buffer alerts in the same group before sending
+  group_wait: 30s
+
+  # How long to wait before sending new alerts added to an existing group
+  group_interval: 5m
+
+  # How long to wait before re-sending a notification for a firing alert
+  repeat_interval: 4h
+
+  # Child routes — evaluated top to bottom, first match wins
+  routes:
+    # ── Critical alerts → PagerDuty + webhook ─────────────────
+    - receiver: pagerduty-critical
+      matchers:
+        - severity = "critical"
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+      continue: true  # Also send to next matching route
+
+    # ── Critical alerts → webhook (for persistence) ───────────
+    - receiver: webhook-all
+      matchers:
+        - severity = "critical"
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+
+    # ── Warning alerts → webhook only ─────────────────────────
+    - receiver: webhook-all
+      matchers:
+        - severity = "warning"
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+    # ── Info alerts → webhook only (less aggressive timing) ───
+    - receiver: webhook-all
+      matchers:
+        - severity = "info"
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 12h
+
+    # ── Compound alerts → dedicated routing ───────────────────
+    # Compound alerts are already critical/warning, but we can
+    # add specific handling if needed in the future
+    - receiver: webhook-all
+      matchers:
+        - compound = "true"
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 2h
+
+# ─── Inhibition Rules ────────────────────────────────────────
+# Suppress noisy downstream alerts when the root cause is known.
+inhibit_rules:
+  # If a service is DOWN (critical), suppress all warnings for that service.
+  # Rationale: if the service is unreachable, warning-level metrics are meaningless.
+  - source_matchers:
+      - alertname = "ServiceDown"
+    target_matchers:
+      - severity = "warning"
+    # Only inhibit if it's the same pipeline/service
+    equal: ["pipeline"]
+
+  # If the full pipeline is stalled, suppress individual pipeline alerts.
+  # Rationale: FullPipelineStall is the root cause; individual stalls are symptoms.
+  - source_matchers:
+      - alertname = "FullPipelineStall"
+    target_matchers:
+      - alertname = "IngestionPipelineStalled"
+
+  # If cascading failure is detected, suppress the individual ServiceDown.
+  # Rationale: CascadingFailure provides more context than a bare ServiceDown.
+  - source_matchers:
+      - alertname = "CascadingFailure"
+    target_matchers:
+      - alertname = "ServiceDown"
+    equal: ["pipeline"]
+
+  # If Kafka+Ingestion compound fires, suppress individual Kafka errors warning.
+  - source_matchers:
+      - alertname = "KafkaIngestionFailure"
+    target_matchers:
+      - alertname = "KafkaPublishErrors"
+
+  # If DiagnosisPipelineDown (critical) fires, suppress partial failures (warning).
+  - source_matchers:
+      - alertname = "DiagnosisPipelineDown"
+    target_matchers:
+      - alertname = "DiagnosisPartialFailures"
+
+  # If DetectionWithoutDiagnosis compound fires, suppress individual diagnosis alerts.
+  - source_matchers:
+      - alertname = "DetectionWithoutDiagnosis"
+    target_matchers:
+      - alertname = "DiagnosisPartialFailures"
+
+  # Critical alerts always inhibit info-level alerts for the same pipeline.
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "info"
+    equal: ["pipeline"]
+
+# ─── Receivers ───────────────────────────────────────────────
+receivers:
+  # ── PagerDuty (critical alerts only) ────────────────────────
+  # Uses Events API v2 for rich alert context.
+  # The routing_key comes from PagerDuty service integration.
+  #
+  # Setup:
+  #   1. Create free account at https://developer.pagerduty.com/sign-up/
+  #   2. Create a Service → Add Integration → "Events API v2"
+  #   3. Copy the "Integration Key" (32-char hex string)
+  #   4. Set PAGERDUTY_ROUTING_KEY=<key> in your .env file
+  #
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        severity: critical
+        # Rich alert details sent to PagerDuty
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          alert_name: '{{ .CommonLabels.alertname }}'
+          pipeline: '{{ .CommonLabels.pipeline }}'
+          tier: '{{ .CommonLabels.tier }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+          dashboard: '{{ .CommonAnnotations.dashboard_url }}'
+          firing_since: '{{ .Alerts.Firing | len }} alert(s) firing'
+        # Group by pipeline for PagerDuty deduplication
+        group: '{{ .CommonLabels.pipeline }}-{{ .CommonLabels.alertname }}'
+        # Auto-resolve in PagerDuty when alert resolves in Prometheus
+        send_resolved: true
+
+  # ── Webhook receiver (all alerts) ──────────────────────────
+  # Posts to our custom alert-receiver service for persistence
+  # and optional AI triage (critical alerts trigger LLM diagnosis).
+  - name: webhook-all
+    webhook_configs:
+      - url: "http://host.docker.internal:9096/alerts"
+        send_resolved: true
+        # Retry on failure
+        http_config:
+          follow_redirects: true
+        max_alerts: 0  # Send all alerts in one batch (no limit)
+
+  # ── Null receiver (for future silencing rules) ──────────────
+  - name: "null"
+
+# ─── Templates (optional, for custom notification formatting) ─
+templates: []
